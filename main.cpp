@@ -39,7 +39,7 @@ int main()
       r800_state state(fd);
       state.set_default_state();
       state.flush_cs();
-      sleep(3);
+      sleep(1);
      }
 //    int fd = drmOpen("/dev/dri/card0", "pci:0000:01:00.0");
 //     cout << fd << endl;

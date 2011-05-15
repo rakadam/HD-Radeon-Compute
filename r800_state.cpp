@@ -1,11 +1,60 @@
 #include <iostream>
 #include <assert.h>
 #include <sys/ioctl.h>
+#include <string.h>
+
 #include "r800_state.h"
 #include "radeon_reg.h"
 #include "evergreen_reg.h"
 
 using namespace std;
+
+compute_shader::compute_shader(r800_state* state, const std::vector<char>& binary)
+{
+  const uint32_t* header = (const uint32_t*)&binary[0];
+  
+  assert(binary.size()%4 == 0);
+  assert(header[0] == 0x42424242);
+
+  uint32_t sum = 0;
+  
+  for (int i = 2; i < binary.size()/4; i++)
+  {
+    sum = sum + header[i];
+  }
+  
+  assert(header[1] == sum);
+  
+  lds_alloc = header[3];
+  num_gprs = header[4];
+  temp_gprs = header[5];
+  global_gprs = header[6];
+  stack_size = header[7];
+  thread_num = header[8];
+  dyn_gpr_limit = header[9];
+
+  /* 10-15 reserved*/
+  
+  int shader_start = 16*4;
+  
+  alloc_size = binary.size() - shader_start;
+  
+  if (alloc_size % 16)
+  {
+    alloc_size += (16 - alloc_size % 16);
+  }
+  
+  binary_code_bo = state->bo_open(0, alloc_size, 0, RADEON_GEM_DOMAIN_VRAM, 0);
+  
+  assert(binary_code_bo != NULL);
+  
+  assert(radeon_bo_map(binary_code_bo, 1) == 0);
+  
+  memcpy(binary_code_bo->ptr, &binary[0] + shader_start, binary.size() - shader_start);
+  
+  radeon_bo_unmap(binary_code_bo);
+}
+
 
 #define CP_PACKET0(reg, n)                                              \
         (RADEON_CP_PACKET0 | ((n) << 16) | ((reg) >> 2))
@@ -203,6 +252,14 @@ void r800_state::get_master()
   {
     cerr << "Cannot get master" << endl;
   }
+  
+  drop_master();
+  
+  ret = ioctl(fd, DRM_IOCTL_SET_MASTER, 0);
+  if (ret < 0)
+  {
+    cerr << "Cannot get master" << endl;
+  }  
 }
 
 void r800_state::drop_master()
@@ -324,6 +381,12 @@ void r800_state::sq_setup()
     reg[DB_RENDER_OVERRIDE] = {0, 0};
     reg[DB_PRELOAD_CONTROL] = 0;
     reg[DB_SRESULTS_COMPARE_STATE] = {0, 0};
+    
+    reg[SPI_PS_INPUT_CNTL_0] = 0;
+    reg[SPI_PS_IN_CONTROL_0] = 0;
+    reg[SPI_PS_IN_CONTROL_1] = 0;
+    
+    reg[SQ_PGM_RESOURCES_PS] = {0, 0};
 }
 
 void r800_state::set_default_sq()
@@ -681,5 +744,32 @@ void r800_state::flush_cs()
   radeon_cs_erase(cs);
 }
 
+void r800_state::prepare_compute_shader(compute_shader* sh)
+{
+  //this code wont really work until we fixed it up....
+  
+  {
+    asic_cmd reg(this);
+    reg[SQ_PGM_START_PS] = 0;
+    reg.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
+  }
+  
+  asic_cmd reg(this);
+ 
+  reg[SQ_PGM_RESOURCES_PS] = {
+    sh->num_gprs | (sh->stack_size << STACK_SIZE_shift) | PRIME_CACHE_ENABLE,
+    SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
+  };
+  
+  reg[SQ_GPR_RESOURCE_MGMT_1] = sh->num_gprs | (sh->temp_gprs << NUM_CLAUSE_TEMP_GPRS_shift); 
+  
+  reg[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = sh->global_gprs << CS_GGPR_BASE_shift;
+  reg[SQ_LDS_ALLOC_PS] = sh->lds_alloc; //in 32 bit words
+  reg[SQ_THREAD_RESOURCE_MGMT] = sh->thread_num;
+  
+  reg[SQ_STACK_RESOURCE_MGMT_1] = sh->stack_size;
+  reg[SQ_PGM_EXPORTS_PS] = 0;
+  
+}
 
 

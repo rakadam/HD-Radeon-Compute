@@ -2650,6 +2650,7 @@ enum {
 	STACK_SIZE_shift                                  = 8,
 	DX10_CLAMP_bit                                    = 1 << 21,
 	UNCACHED_FIRST_INST_bit                           = 1 << 28,
+	PRIME_CACHE_ENABLE                                = 3 << 28,
 	CLAMP_CONSTS_bit                                  = 1 << 31,
     SQ_PGM_RESOURCES_2_PS                                 = 0x00028848,
 	SINGLE_ROUND_mask                                 = 0x03 << 0,
@@ -2803,6 +2804,7 @@ enum {
 /* 	ALLOW_SINGLE_DENORM_OUT_bit                       = 1 << 5, */
 /* 	ALLOW_DOUBLE_DENORM_IN_bit                        = 1 << 6, */
 /* 	ALLOW_DOUBLE_DENORM_OUT_bit                       = 1 << 7, */
+//     SQ_LDS_ALLOC_PS                                       = 0x000288EC,
     SQ_VTX_SEMANTIC_CLEAR                                 = 0x000288f0,
     SQ_ESGS_RING_ITEMSIZE                                 = 0x00028900,
 /* 	ITEMSIZE_mask                                     = 0x7fff << 0, */

@@ -250,16 +250,22 @@ typedef struct {
     bool32                      disable_cube_wrap;
 } tex_sampler_t;
 
+class r800_state;
+
 struct compute_shader
 {
-  std::vector<uint32_t> binary;
-  int lds_alloc;
+  compute_shader(r800_state* state, const std::vector<char>& binary);
+  
+  struct radeon_bo* binary_code_bo;
+  
+  int alloc_size;
+  int lds_alloc; //in 32bit words
   int num_gprs;
   int temp_gprs;
+  int global_gprs;
   int stack_size;
   int thread_num; //per SIMD
   int dyn_gpr_limit;
-  
 };
 
 class asic_cmd;
@@ -311,6 +317,8 @@ class r800_state
     void set_default_sq();
     void set_default_state();
     void flush_cs();
+    
+    void prepare_compute_shader(compute_shader* sh);
 };
 
 class asic_cmd
