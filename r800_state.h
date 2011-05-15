@@ -11,6 +11,8 @@ extern "C" {
 
 #include <cstdint>
 
+#define RADEON_BUFFER_SIZE		65536
+
 typedef enum {
     CHIP_FAMILY_UNKNOW,
     CHIP_FAMILY_LEGACY,
@@ -270,8 +272,12 @@ class r800_state
   struct radeon_bo_manager * bom;
   struct radeon_cs *cs;
   sq_config_t sq_conf;
+  struct drm_radeon_gem_info mminfo;
   
   RADEONChipFamily ChipFamily;
+  static void radeon_cs_flush_indirect(r800_state* state);
+  
+  //TODO: use  radeon_cs_set_limit(info->cs, RADEON_GEM_DOMAIN_VRAM, 
   
   public:
     r800_state(int fd);
@@ -295,6 +301,8 @@ class r800_state
     void set_regs(uint32_t reg, std::vector<uint32_t> vals);
     void add_persistent_bo(struct radeon_bo *bo, uint32_t read_domains, uint32_t write_domain);
     
+    void get_master();
+    void drop_master();
     void start_3d();
     void sq_setup();
     void set_default_sq();

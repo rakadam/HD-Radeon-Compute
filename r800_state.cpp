@@ -1,8 +1,11 @@
 #include <iostream>
 #include <assert.h>
+#include <sys/ioctl.h>
 #include "r800_state.h"
 #include "radeon_reg.h"
 #include "evergreen_reg.h"
+
+using namespace std;
 
 #define CP_PACKET0(reg, n)                                              \
         (RADEON_CP_PACKET0 | ((n) << 16) | ((reg) >> 2))
@@ -13,22 +16,59 @@
 #define CP_PACKET3(pkt, n)                                              \
         (RADEON_CP_PACKET3 | (pkt) | ((n) << 16))
 
+void r800_state::radeon_cs_flush_indirect(r800_state* state)
+{
+  radeon_cs_emit(state->cs);
+  radeon_cs_erase(state->cs);
+}
+
 r800_state::r800_state(int fd) : fd(fd)
 {
+  get_master();
+  
   gem = radeon_cs_manager_gem_ctor(fd);
   assert(gem);
   bom = radeon_bo_manager_gem_ctor(fd);
   assert(bom);
-  cs = radeon_cs_create(gem, 0);
+  cs = radeon_cs_create(gem, RADEON_BUFFER_SIZE/4);
+  
+  if (!cs)
+  {
+    cerr << "Failed to open cs" << endl;
+    exit(1);
+  }
   
   ChipFamily = CHIP_FAMILY_PALM; //TODO: fix it
+  
+
+  if (drmCommandWriteRead(fd, DRM_RADEON_GEM_INFO, &mminfo, sizeof(mminfo)))
+  {
+    cerr << "Cannot get GEM info" << endl;
+    exit(1);
+  }
+  
+  printf("mem size init: gart size :%llx vram size: s:%llx visible:%llx\n",
+    (unsigned long long)mminfo.gart_size,
+    (unsigned long long)mminfo.vram_size,
+    (unsigned long long)mminfo.vram_visible);
+    
+  printf("mem size init: gart size :%iMbytes vram size: s:%iMbytes visible:%iMbytes\n",
+    (unsigned long long)mminfo.gart_size/1024/1024,
+    (unsigned long long)mminfo.vram_size/1024/1024,
+    (unsigned long long)mminfo.vram_visible/1024/1024);
+
+  radeon_cs_set_limit(cs, RADEON_GEM_DOMAIN_GTT, mminfo.gart_size);
+  radeon_cs_space_set_flush(cs, (void (*)(void*))radeon_cs_flush_indirect, this);
+  
+//   TODO: OUTREG(RADEON_RB3D_CNTL, 0); need to map PCI memory for radeon MMIO-> need pciaccess.h
 }
 
 r800_state::~r800_state()
 {
-   radeon_cs_destroy(cs);
+  radeon_cs_destroy(cs);
   radeon_bo_manager_gem_dtor(bom);
   radeon_cs_manager_gem_dtor(gem);
+  drop_master();
 }
 
 struct radeon_bo* r800_state::bo_open(uint32_t size,
@@ -143,6 +183,25 @@ void r800_state::send_packet3(uint32_t cmd, std::vector<uint32_t> vals)
   for (int i = 0; i < int(vals.size()); i++)
   {
     write_dword(vals[i]);
+  }
+}
+
+void r800_state::get_master()
+{
+  int ret = ioctl(fd, DRM_IOCTL_SET_MASTER, 0);
+  if (ret < 0)
+  {
+    cerr << "Cannot get master" << endl;
+  }
+}
+
+void r800_state::drop_master()
+{
+  int ret = ioctl(fd, DRM_IOCTL_DROP_MASTER, 0);
+  if (ret < 0)
+  {
+    cerr << "Cannot drop master" << endl;
+    throw 0; //shouldn't happen!
   }
 }
 

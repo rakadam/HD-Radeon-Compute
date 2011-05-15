@@ -24,9 +24,22 @@ int main()
 
      int fd = open("/dev/dri/card0", O_RDWR, 0);
      
+    struct drm_radeon_gem_info mminfo;
+
+//     if (!drmCommandWriteRead(fd, DRM_RADEON_GEM_INFO, &mminfo, sizeof(mminfo)))
+//     {
+// 	printf("mem size init: gart size :%llx vram size: s:%llx visible:%llx\n",
+// 		    (unsigned long long)mminfo.gart_size,
+// 		    (unsigned long long)mminfo.vram_size,
+// 		    (unsigned long long)mminfo.vram_visible);
+//     }
+//      
+//      if (0)
      {
       r800_state state(fd);
       state.set_default_state();
+      state.flush_cs();
+      sleep(3);
      }
 //    int fd = drmOpen("/dev/dri/card0", "pci:0000:01:00.0");
 //     cout << fd << endl;
