@@ -64,8 +64,10 @@ enum {
     IT_NOP                      = 0x10,
     IT_INDIRECT_BUFFER_END      = 0x17,
     IT_SET_PREDICATION          = 0x20,
+    IT_REG_RMW                  = 0x21,
     IT_COND_EXEC                = 0x22,
     IT_PRED_EXEC                = 0x23,
+    IT_START_3D_CMDBUF          = 0x24,
     IT_DRAW_INDEX_2             = 0x27,
     IT_CONTEXT_CONTROL          = 0x28,
     IT_DRAW_INDEX_OFFSET        = 0x29,
@@ -76,16 +78,19 @@ enum {
     IT_NUM_INSTANCES            = 0x2F,
     IT_INDIRECT_BUFFER          = 0x32,
     IT_STRMOUT_BUFFER_UPDATE    = 0x34,
+    IT_INDIRECT_BUFFER_MP       = 0x38,
     IT_MEM_SEMAPHORE            = 0x39,
     IT_MPEG_INDEX               = 0x3A,
     IT_WAIT_REG_MEM             = 0x3C,
     IT_MEM_WRITE                = 0x3D,
+    IT_CP_INTERRUPT             = 0x40,
     IT_SURFACE_SYNC             = 0x43,
     IT_ME_INITIALIZE            = 0x44,
     IT_COND_WRITE               = 0x45,
     IT_EVENT_WRITE              = 0x46,
     IT_EVENT_WRITE_EOP          = 0x47,
     IT_EVENT_WRITE_EOS          = 0x48,
+    IT_ONE_REG_WRITE            = 0x57,
     IT_SET_CONFIG_REG           = 0x68,
     IT_SET_CONTEXT_REG          = 0x69,
     IT_SET_ALU_CONST            = 0x6A,
@@ -94,6 +99,7 @@ enum {
     IT_SET_RESOURCE             = 0x6D,
     IT_SET_SAMPLER              = 0x6E,
     IT_SET_CTL_CONST            = 0x6F,
+    IT_SURFACE_BASE_UPDATE      = 0x73
 };
 
 /* IT_WAIT_REG_MEM operation encoding */

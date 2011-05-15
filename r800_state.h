@@ -301,6 +301,9 @@ class r800_state
     void set_regs(uint32_t reg, std::vector<uint32_t> vals);
     void add_persistent_bo(struct radeon_bo *bo, uint32_t read_domains, uint32_t write_domain);
     
+    struct radeon_bo *bo_open(uint32_t handle, uint32_t size, uint32_t alignment, uint32_t domains, uint32_t flags);
+    int bo_is_referenced_by_cs(struct radeon_bo *bo);
+
     void get_master();
     void drop_master();
     void start_3d();

@@ -2059,8 +2059,8 @@ enum {
 	PA_SC_VPORT_ZMAX_0_offset                         = 8,
     SX_MISC                                               = 0x00028350,
 	MULTIPASS_bit                                     = 1 << 0,
-    SQ_VTX_SEMANTIC_0                                     = 0x00028380,
-	SQ_VTX_SEMANTIC_0_num                             = 32,
+    SQ_VTX_SEMANTIC                                       = 0x00028380,
+	SQ_VTX_SEMANTIC_num                               = 32,
 /* 	SEMANTIC_ID_mask                                  = 0xff << 0, */
 /* 	SEMANTIC_ID_shift                                 = 0, */
     VGT_MAX_VTX_INDX                                      = 0x00028400,
@@ -3063,7 +3063,7 @@ enum {
 	    GS_CUT_256                                    = 0x02,
 	    GS_CUT_128                                    = 0x03,
 	MODE_HI_bit                                       = 1 << 8,
-    PA_SC_MODE_CNTL_0                                     = 0x00028a48,
+    PA_SC_MODE_CNTL                                       = 0x00028a48,
 	MSAA_ENABLE_bit                                   = 1 << 0,
 	VPORT_SCISSOR_ENABLE_bit                          = 1 << 1,
 	LINE_STIPPLE_ENABLE_bit                           = 1 << 2,
@@ -3165,7 +3165,7 @@ enum {
 	PREFETCH_WIDTH_shift                              = 6,
 	PREFETCH_HEIGHT_mask                              = 0x3f << 12,
 	PREFETCH_HEIGHT_shift                             = 12,
-    DB_SRESULTS_COMPARE_STATE0                            = 0x00028ac0,
+    DB_SRESULTS_COMPARE_STATE                             = 0x00028ac0,
 	COMPAREFUNC0_mask                                 = 0x07 << 0,
 	COMPAREFUNC0_shift                                = 0,
 /* 	    REF_NEVER                                     = 0x00, */

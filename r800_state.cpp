@@ -165,6 +165,16 @@ void r800_state::add_persistent_bo(struct radeon_bo *bo,
   radeon_cs_space_add_persistent_bo(cs, bo, read_domains, write_domain);
 }
 
+struct radeon_bo *r800_state::bo_open(uint32_t handle, uint32_t size, uint32_t alignment, uint32_t domains, uint32_t flags)
+{
+    return radeon_bo_open(bom, handle, size, alignment, domains, flags);
+}
+
+int r800_state::bo_is_referenced_by_cs(struct radeon_bo *bo)
+{
+  return radeon_bo_is_referenced_by_cs(bo, cs);
+}
+
 void r800_state::set_regs(uint32_t reg, std::vector<uint32_t> vals)
 {
   packet0(reg, vals.size());
@@ -259,24 +269,61 @@ void r800_state::sq_setup()
     sq_stack_resource_mgmt_3 = ((sq_conf.num_hs_stack_entries << NUM_HS_STACK_ENTRIES_shift) |
 				(sq_conf.num_ls_stack_entries << NUM_LS_STACK_ENTRIES_shift));
     
-    asic_cmd cmd(this);
+    asic_cmd reg(this);
     
-    cmd[SQ_DYN_GPR_CNTL_PS_FLUSH_REQ] = 0; // disable dyn gprs
+    reg[SQ_DYN_GPR_CNTL_PS_FLUSH_REQ] = 0; // disable dyn gprs
     
-    cmd[SQ_CONFIG] = {
+    reg[SQ_CONFIG] = {
       sq_config,
       sq_gpr_resource_mgmt_1,
       sq_gpr_resource_mgmt_2,
       sq_gpr_resource_mgmt_3
     };
     
-    cmd[SQ_THREAD_RESOURCE_MGMT] = {
+    reg[SQ_THREAD_RESOURCE_MGMT] = {
       sq_thread_resource_mgmt,
       sq_thread_resource_mgmt_2,
       sq_stack_resource_mgmt_1,
       sq_stack_resource_mgmt_2,
       sq_stack_resource_mgmt_3      
-    };   
+    };
+    
+    reg[SPI_CONFIG_CNTL] = 0;
+    reg[SPI_CONFIG_CNTL_1] = X_DELAY_22_CLKS;
+    reg[PA_SC_MODE_CNTL] = {0, 0};
+    reg[SQ_ESGS_RING_ITEMSIZE] = 0;
+    reg[SQ_GSVS_RING_ITEMSIZE] = 0;
+    reg[SQ_ESTMP_RING_ITEMSIZE] = 0;
+    reg[SQ_GSTMP_RING_ITEMSIZE] = 0;
+    reg[SQ_VSTMP_RING_ITEMSIZE] = 0;
+    reg[SQ_PSTMP_RING_ITEMSIZE] = 0;
+    reg[SQ_GS_VERT_ITEMSIZE] = {0, 0, 0, 0};
+    reg[VGT_OUTPUT_PATH_CNTL] = 0;
+    reg[VGT_HOS_CNTL] = 0;
+    reg[VGT_HOS_MAX_TESS_LEVEL] = 0;
+    reg[VGT_HOS_MIN_TESS_LEVEL] = 0;
+    reg[VGT_HOS_REUSE_DEPTH] = 0;
+    reg[VGT_GROUP_PRIM_TYPE] = 0;
+    reg[VGT_GROUP_FIRST_DECR] = 0;
+    reg[VGT_GROUP_DECR] = 0;
+    reg[VGT_GROUP_VECT_0_CNTL] = 0;
+    reg[VGT_GROUP_VECT_1_CNTL] = 0;
+    reg[VGT_GROUP_VECT_0_FMT_CNTL] = 0;
+    reg[VGT_GROUP_VECT_1_FMT_CNTL] = 0;
+    reg[VGT_GS_MODE] = 0;
+    reg[VGT_STRMOUT_CONFIG] = 0;
+    reg[VGT_STRMOUT_BUFFER_CONFIG] = 0;
+    reg[VGT_REUSE_OFF] = 0;
+    reg[VGT_VTX_CNT_EN] = 0;
+    reg[PA_CL_ENHANCE] = 3 << 1 | 1;
+    reg[SQ_VTX_SEMANTIC] = vector<uint32_t>(SQ_VTX_SEMANTIC_num);
+    reg[PA_CL_CLIP_CNTL] = 0;
+    
+    reg[DB_SHADER_CONTROL] = 0;
+    reg[DB_RENDER_CONTROL] = 0;
+    reg[DB_RENDER_OVERRIDE] = {0, 0};
+    reg[DB_PRELOAD_CONTROL] = 0;
+    reg[DB_SRESULTS_COMPARE_STATE] = {0, 0};
 }
 
 void r800_state::set_default_sq()
