@@ -10,51 +10,6 @@
 
 using namespace std;
 
-compute_shader::compute_shader(r800_state* state, const std::vector<char>& binary)
-{
-  const uint32_t* header = (const uint32_t*)&binary[0];
-  
-  assert(binary.size()%4 == 0);
-  assert(header[0] == 0x42424242);
-
-  uint32_t sum = 0;
-  
-  for (int i = 2; i < binary.size()/4; i++)
-  {
-    sum = sum + header[i];
-  }
-  
-  assert(header[1] == sum);
-  
-  lds_alloc = header[3];
-  num_gprs = header[4];
-  temp_gprs = header[5];
-  global_gprs = header[6];
-  stack_size = header[7];
-  thread_num = header[8];
-  dyn_gpr_limit = header[9];
-
-  /* 10-15 reserved*/
-  
-  int shader_start = 16*4;
-  
-  alloc_size = binary.size() - shader_start;
-  
-  if (alloc_size % 16)
-  {
-    alloc_size += (16 - alloc_size % 16);
-  }
-  
-  binary_code_bo = state->bo_open(0, alloc_size, 0, RADEON_GEM_DOMAIN_VRAM, 0);
-  
-  assert(binary_code_bo != NULL);
-  
-  assert(radeon_bo_map(binary_code_bo, 1) == 0);
-  
-  memcpy(binary_code_bo->ptr, &binary[0] + shader_start, binary.size() - shader_start);
-  
-  radeon_bo_unmap(binary_code_bo);
-}
 
 
 #define CP_PACKET0(reg, n)                                              \

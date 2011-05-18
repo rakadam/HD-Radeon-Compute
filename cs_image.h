@@ -2,6 +2,7 @@
 #define CS_IMAGE_H
 
 #include <cstdint>
+#include <vector>
 
 struct cs_image_header
 {
