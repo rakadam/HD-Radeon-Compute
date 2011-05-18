@@ -285,6 +285,8 @@ class r800_state
   
   //TODO: use  radeon_cs_set_limit(info->cs, RADEON_GEM_DOMAIN_VRAM, 
   
+  struct radeon_bo *dummy_bo, *dummy_bo_ps;
+  
   public:
     r800_state(int fd);
     ~r800_state();
@@ -316,7 +318,15 @@ class r800_state
     void sq_setup();
     void set_default_sq();
     void set_default_state();
+    void set_spi_defaults();
+    void set_draw_auto(int num_indices);
+    void set_dummy_render_target();
     void flush_cs();
+    void upload_dummy_ps();
+    
+    void set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc_addr, struct radeon_bo *bo, uint32_t rdomains, uint32_t wdomain);
+    
+    void setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset); //for VS only for now, later CS
     
     void prepare_compute_shader(compute_shader* sh);
 };
@@ -355,7 +365,7 @@ public:
     {
       cmd->set_reg(reg, val);
     }
-    
+        
     void operator=(int val)
     {
       cmd->set_reg(reg, val);

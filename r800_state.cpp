@@ -6,6 +6,7 @@
 #include "r800_state.h"
 #include "radeon_reg.h"
 #include "evergreen_reg.h"
+#include "dummy_ps_ec.h"
 
 using namespace std;
 
@@ -110,6 +111,8 @@ r800_state::r800_state(int fd) : fd(fd)
   radeon_cs_set_limit(cs, RADEON_GEM_DOMAIN_VRAM, mminfo.vram_size);
   radeon_cs_space_set_flush(cs, (void (*)(void*))radeon_cs_flush_indirect, this);
 
+  dummy_bo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  dummy_bo_ps = bo_open(sizeof(dummy_ps_shader_binary), 1024, RADEON_GEM_DOMAIN_VRAM, 0);
 }
 
 r800_state::~r800_state()
@@ -326,169 +329,192 @@ void r800_state::sq_setup()
     sq_stack_resource_mgmt_3 = ((sq_conf.num_hs_stack_entries << NUM_HS_STACK_ENTRIES_shift) |
 				(sq_conf.num_ls_stack_entries << NUM_LS_STACK_ENTRIES_shift));
     
-    asic_cmd reg(this);
-    
-    reg[SQ_DYN_GPR_CNTL_PS_FLUSH_REQ] = 0; // disable dyn gprs
-    
-    reg[SQ_CONFIG] = {
-      sq_config,
-      sq_gpr_resource_mgmt_1,
-      sq_gpr_resource_mgmt_2,
-      sq_gpr_resource_mgmt_3
-    };
-    
-    reg[SQ_THREAD_RESOURCE_MGMT] = {
-      sq_thread_resource_mgmt,
-      sq_thread_resource_mgmt_2,
-      sq_stack_resource_mgmt_1,
-      sq_stack_resource_mgmt_2,
-      sq_stack_resource_mgmt_3      
-    };
-    
-    reg[SPI_CONFIG_CNTL] = 0;
-    reg[SPI_CONFIG_CNTL_1] = X_DELAY_22_CLKS;
-    reg[PA_SC_MODE_CNTL] = {0, 0};
-    reg[SQ_ESGS_RING_ITEMSIZE] = 0;
-    reg[SQ_GSVS_RING_ITEMSIZE] = 0;
-    reg[SQ_ESTMP_RING_ITEMSIZE] = 0;
-    reg[SQ_GSTMP_RING_ITEMSIZE] = 0;
-    reg[SQ_VSTMP_RING_ITEMSIZE] = 0;
-    reg[SQ_PSTMP_RING_ITEMSIZE] = 0;
-    reg[SQ_GS_VERT_ITEMSIZE] = {0, 0, 0, 0};
-    reg[SQ_VTX_BASE_VTX_LOC] = {0, 0};
-    
-//     reg[DB_Z_INFO] = 0;
-//     reg[DB_STENCIL_INFO] = 0;
-//     reg[DB_HTILE_DATA_BASE] = 0;
-    
-    reg[DB_DEPTH_CONTROL] = 0;
-    
-    reg[VGT_OUTPUT_PATH_CNTL] = 0;
-    reg[VGT_HOS_CNTL] = 0;
-    reg[VGT_HOS_MAX_TESS_LEVEL] = 0;
-    reg[VGT_HOS_MIN_TESS_LEVEL] = 0;
-    reg[VGT_HOS_REUSE_DEPTH] = 0;
-    reg[VGT_GROUP_PRIM_TYPE] = 0;
-    reg[VGT_GROUP_FIRST_DECR] = 0;
-    reg[VGT_GROUP_DECR] = 0;
-    reg[VGT_GROUP_VECT_0_CNTL] = 0;
-    reg[VGT_GROUP_VECT_1_CNTL] = 0;
-    reg[VGT_GROUP_VECT_0_FMT_CNTL] = 0;
-    reg[VGT_GROUP_VECT_1_FMT_CNTL] = 0;
-    reg[VGT_GS_MODE] = 0;
-    reg[VGT_STRMOUT_CONFIG] = 0;
-    reg[VGT_STRMOUT_BUFFER_CONFIG] = 0;
-    reg[VGT_REUSE_OFF] = 0;
-    reg[VGT_VTX_CNT_EN] = 0;
-    reg[PA_CL_ENHANCE] = 3 << 1 | 1;
-    reg[SQ_VTX_SEMANTIC] = vector<uint32_t>(SQ_VTX_SEMANTIC_num);
-    reg[PA_CL_CLIP_CNTL] = 0;
-    reg[PA_SC_VPORT_ZMIN_0] = float(0.0);
-    reg[PA_SC_VPORT_ZMAX_0] = float(1.0);
-    reg[DB_SHADER_CONTROL] = 0;
-    reg[DB_RENDER_CONTROL] = STENCIL_COMPRESS_DISABLE_bit | DEPTH_COMPRESS_DISABLE_bit;
-    reg[DB_COUNT_CONTROL] = 0;
-    reg[DB_DEPTH_VIEW] = 0;
-    reg[DB_RENDER_OVERRIDE] = {0, 0};
-    reg[DB_PRELOAD_CONTROL] = 0;
-    reg[DB_SRESULTS_COMPARE_STATE] = {0, 0};
-    
-    reg[DB_STENCIL_CLEAR] = 0;
-    reg[DB_DEPTH_CLEAR] = 0;
-    reg[DB_ALPHA_TO_MASK] = 0;
-    
-    reg[SX_MISC] = 0;
-    
-    reg[SX_ALPHA_TEST_CONTROL] = {0, 0, 0, 0, 0};
-    reg[CB_SHADER_MASK] = 0;
-    reg[PA_SC_WINDOW_OFFSET] = 0;
-    reg[PA_SC_CLIPRECT_RULE] = CLIP_RULE_mask;
-    reg[PA_SC_EDGERULE] = 0xAAAAAAAA;
-    reg[PA_SU_HARDWARE_SCREEN_OFFSET] = 0;
-    
-    reg[SQ_PGM_RESOURCES_PS] = {0, 0};
-    
-    for (int i = 0; i < PA_SC_CLIPRECT_0_TL_num; i++)
     {
-      reg[PA_SC_CLIPRECT_0_TL + i * PA_SC_CLIPRECT_0_TL_offset] = {
-      ((0 << PA_SC_CLIPRECT_0_TL__TL_X_shift) |
-	  (0 << PA_SC_CLIPRECT_0_TL__TL_Y_shift)), 
-      ((8192 << PA_SC_CLIPRECT_0_BR__BR_X_shift) |
-	  (8192 << PA_SC_CLIPRECT_0_BR__BR_Y_shift))
+      asic_cmd reg(this);
+      
+      reg[SQ_DYN_GPR_CNTL_PS_FLUSH_REQ] = 0; // disable dyn gprs
+      
+      reg[SQ_CONFIG] = {
+	sq_config,
+	sq_gpr_resource_mgmt_1,
+	sq_gpr_resource_mgmt_2,
+	sq_gpr_resource_mgmt_3
       };
+      
+      reg[SQ_THREAD_RESOURCE_MGMT] = {
+	sq_thread_resource_mgmt,
+	sq_thread_resource_mgmt_2,
+	sq_stack_resource_mgmt_1,
+	sq_stack_resource_mgmt_2,
+	sq_stack_resource_mgmt_3      
+      };
+      
+      reg[SPI_CONFIG_CNTL] = 0;
+      reg[SPI_CONFIG_CNTL_1] = X_DELAY_22_CLKS;
+      reg[PA_SC_MODE_CNTL] = {0, 0};
+      reg[SQ_ESGS_RING_ITEMSIZE] = 0;
+      reg[SQ_GSVS_RING_ITEMSIZE] = 0;
+      reg[SQ_ESTMP_RING_ITEMSIZE] = 0;
+      reg[SQ_GSTMP_RING_ITEMSIZE] = 0;
+      reg[SQ_VSTMP_RING_ITEMSIZE] = 0;
+      reg[SQ_PSTMP_RING_ITEMSIZE] = 0;
+      reg[SQ_GS_VERT_ITEMSIZE] = {0, 0, 0, 0};
+      reg[SQ_VTX_BASE_VTX_LOC] = {0, 0};
+    }
+
+
+    {
+      asic_cmd reg(this);
+      reg[DB_Z_INFO] = 0;
+      reg.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
     }
     
-    for (int i = 0; i < PA_SC_VPORT_SCISSOR_0_TL_num; i++)
     {
-      reg[PA_SC_VPORT_SCISSOR_0_TL + i * PA_SC_VPORT_SCISSOR_0_TL_offset] = {
-      ((0 << PA_SC_VPORT_SCISSOR_0_TL__TL_X_shift) |
-	  (0 << PA_SC_VPORT_SCISSOR_0_TL__TL_Y_shift) |
-	  WINDOW_OFFSET_DISABLE_bit),
-      ((8192 << PA_SC_VPORT_SCISSOR_0_BR__BR_X_shift) |
-	  (8192 << PA_SC_VPORT_SCISSOR_0_BR__BR_Y_shift))
-      };
+      asic_cmd reg(this);
+      reg[DB_STENCIL_INFO] = 0;
+      reg.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
     }
     
-    reg[PA_SC_MODE_CNTL] = {0, 0};
-    reg[PA_SC_LINE_CNTL] = vector<uint32_t>{0, 0, (X_ROUND_TO_EVEN << PA_SU_VTX_CNTL__ROUND_MODE_shift) |
-	 PIX_CENTER_bit};
-    reg[PA_CL_GB_VERT_CLIP_ADJ] = 1.0f;
-    reg[PA_CL_GB_VERT_DISC_ADJ] = 1.0f;
-    reg[PA_CL_GB_HORZ_CLIP_ADJ] = 1.0f;
-    reg[PA_CL_GB_HORZ_DISC_ADJ] = 1.0f;
+    {
+      asic_cmd reg(this);
+      reg[DB_HTILE_DATA_BASE] = 0;
+      reg.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+    }
     
-    reg[PA_SC_AA_SAMPLE_LOCS_0] = {0, 0, 0, 0, 0, 0, 0, 0};
-    reg[PA_SC_AA_MASK] = 0xFFFFFFFF;
-    reg[PA_CL_CLIP_CNTL] = CLIP_DISABLE_bit;
-    reg[PA_SU_SC_MODE_CNTL] = FACE_bit;
-    reg[PA_CL_VTE_CNTL] = VTX_XY_FMT_bit;
-    reg[PA_CL_VS_OUT_CNTL] = 0;
-    reg[PA_CL_NANINF_CNTL] = 0;
-    reg[PA_SU_LINE_STIPPLE_CNTL] = 0;
-    reg[PA_SU_LINE_STIPPLE_SCALE] = 0;
-    reg[PA_SU_PRIM_FILTER_CNTL] = 0;
- 
-    reg[PA_SU_POLY_OFFSET_DB_FMT_CNTL] = {0, 0, 0, 0, 0, 0};
-    reg[SPI_VS_OUT_ID_0] = 0;
-    reg[SPI_PS_INPUT_CNTL_0] = {0, 0};
-    reg[SPI_PS_IN_CONTROL_0] = 0;
-    reg[SPI_PS_IN_CONTROL_1] = 0;
-    reg[SPI_INPUT_Z] = 0;
-    reg[SPI_FOG_CNTL] = 0;
-    reg[SPI_BARYC_CNTL] = LINEAR_CENTROID_ENA__X_ON_AT_CENTROID << LINEAR_CENTROID_ENA_shift;
-    reg[SPI_PS_IN_CONTROL_2] = vector<uint32_t>{0, 0, 0};
-    reg[CB_BLEND0_CONTROL] = {0, 0, 0, 0, 0, 0, 0, 0};
-//     reg[SQ_PGM_START_FS] = 0;
-    reg[SQ_PGM_RESOURCES_FS] = 0; //we won't use fetch shaders
+    {
+      asic_cmd reg(this);
+      
+      reg[DB_DEPTH_CONTROL] = 0;
+      
+      reg[VGT_OUTPUT_PATH_CNTL] = 0;
+      reg[VGT_HOS_CNTL] = 0;
+      reg[VGT_HOS_MAX_TESS_LEVEL] = 0;
+      reg[VGT_HOS_MIN_TESS_LEVEL] = 0;
+      reg[VGT_HOS_REUSE_DEPTH] = 0;
+      reg[VGT_GROUP_PRIM_TYPE] = 0;
+      reg[VGT_GROUP_FIRST_DECR] = 0;
+      reg[VGT_GROUP_DECR] = 0;
+      reg[VGT_GROUP_VECT_0_CNTL] = 0;
+      reg[VGT_GROUP_VECT_1_CNTL] = 0;
+      reg[VGT_GROUP_VECT_0_FMT_CNTL] = 0;
+      reg[VGT_GROUP_VECT_1_FMT_CNTL] = 0;
+      reg[VGT_GS_MODE] = 0;
+      reg[VGT_STRMOUT_CONFIG] = 0;
+      reg[VGT_STRMOUT_BUFFER_CONFIG] = 0;
+      reg[VGT_REUSE_OFF] = 0;
+      reg[VGT_VTX_CNT_EN] = 0;
+      reg[PA_CL_ENHANCE] = 3 << 1 | 1;
+      reg[SQ_VTX_SEMANTIC] = vector<uint32_t>(SQ_VTX_SEMANTIC_num);
+      reg[PA_CL_CLIP_CNTL] = 0;
+      reg[PA_SC_VPORT_ZMIN_0] = 0.0f;
+      reg[PA_SC_VPORT_ZMAX_0] = 1.0f;
+      reg[DB_SHADER_CONTROL] = 0;
+      reg[DB_RENDER_CONTROL] = STENCIL_COMPRESS_DISABLE_bit | DEPTH_COMPRESS_DISABLE_bit;
+      reg[DB_COUNT_CONTROL] = 0;
+      reg[DB_DEPTH_VIEW] = 0;
+      reg[DB_RENDER_OVERRIDE] = {0, 0};
+      reg[DB_PRELOAD_CONTROL] = 0;
+      reg[DB_SRESULTS_COMPARE_STATE] = {0, 0};
+      
+      reg[DB_STENCIL_CLEAR] = 0;
+      reg[DB_DEPTH_CLEAR] = 0;
+      reg[DB_ALPHA_TO_MASK] = 0;
+      
+      reg[SX_MISC] = 0;
+      
+      reg[SX_ALPHA_TEST_CONTROL] = {0, 0, 0, 0, 0};
+      reg[CB_SHADER_MASK] = 0;
+      reg[PA_SC_WINDOW_OFFSET] = 0;
+      reg[PA_SC_CLIPRECT_RULE] = CLIP_RULE_mask;
+      reg[PA_SC_EDGERULE] = 0xAAAAAAAA;
+      reg[PA_SU_HARDWARE_SCREEN_OFFSET] = 0;
+      
+      reg[SQ_PGM_RESOURCES_PS] = {0, 0};
+      
+      for (int i = 0; i < PA_SC_CLIPRECT_0_TL_num; i++)
+      {
+	reg[PA_SC_CLIPRECT_0_TL + i * PA_SC_CLIPRECT_0_TL_offset] = {
+	((0 << PA_SC_CLIPRECT_0_TL__TL_X_shift) |
+	    (0 << PA_SC_CLIPRECT_0_TL__TL_Y_shift)), 
+	((8192 << PA_SC_CLIPRECT_0_BR__BR_X_shift) |
+	    (8192 << PA_SC_CLIPRECT_0_BR__BR_Y_shift))
+	};
+      }
+      
+      for (int i = 0; i < PA_SC_VPORT_SCISSOR_0_TL_num; i++)
+      {
+	reg[PA_SC_VPORT_SCISSOR_0_TL + i * PA_SC_VPORT_SCISSOR_0_TL_offset] = {
+	((0 << PA_SC_VPORT_SCISSOR_0_TL__TL_X_shift) |
+	    (0 << PA_SC_VPORT_SCISSOR_0_TL__TL_Y_shift) |
+	    WINDOW_OFFSET_DISABLE_bit),
+	((8192 << PA_SC_VPORT_SCISSOR_0_BR__BR_X_shift) |
+	    (8192 << PA_SC_VPORT_SCISSOR_0_BR__BR_Y_shift))
+	};
+      }
+      
+      reg[PA_SC_MODE_CNTL] = {0, 0};
+      reg[PA_SC_LINE_CNTL] = vector<uint32_t>{0, 0, (X_ROUND_TO_EVEN << PA_SU_VTX_CNTL__ROUND_MODE_shift) |
+	  PIX_CENTER_bit};
+      reg[PA_CL_GB_VERT_CLIP_ADJ] = 1.0f;
+      reg[PA_CL_GB_VERT_DISC_ADJ] = 1.0f;
+      reg[PA_CL_GB_HORZ_CLIP_ADJ] = 1.0f;
+      reg[PA_CL_GB_HORZ_DISC_ADJ] = 1.0f;
+      
+      reg[PA_SC_AA_SAMPLE_LOCS_0] = {0, 0, 0, 0, 0, 0, 0, 0};
+      reg[PA_SC_AA_MASK] = 0xFFFFFFFF;
+      reg[PA_CL_CLIP_CNTL] = CLIP_DISABLE_bit;
+      reg[PA_SU_SC_MODE_CNTL] = FACE_bit;
+      reg[PA_CL_VTE_CNTL] = VTX_XY_FMT_bit;
+      reg[PA_CL_VS_OUT_CNTL] = 0;
+      reg[PA_CL_NANINF_CNTL] = 0;
+      reg[PA_SU_LINE_STIPPLE_CNTL] = 0;
+      reg[PA_SU_LINE_STIPPLE_SCALE] = 0;
+      reg[PA_SU_PRIM_FILTER_CNTL] = 0;
+  
+      reg[PA_SU_POLY_OFFSET_DB_FMT_CNTL] = {0, 0, 0, 0, 0, 0};
+      reg[CB_BLEND0_CONTROL] = {0, 0, 0, 0, 0, 0, 0, 0};
+    }
     
-    reg[VGT_MAX_VTX_INDX] = 0xFFFFFFFF;
-    reg[VGT_MIN_VTX_INDX] = 0;
-    reg[VGT_INDX_OFFSET] = 0;
-    reg[VGT_MULTI_PRIM_IB_RESET_INDX] = 0;
+    {
+      asic_cmd reg(this);
+      
+      reg[SQ_PGM_START_FS] = 0;
+      reg.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+    }
     
-    reg[VGT_INSTANCE_STEP_RATE_0] = {0, 0};
-    reg[VGT_REUSE_OFF] = 0;
-    reg[VGT_VTX_CNT_EN] = 0;
-    
-    reg[PA_SU_POINT_SIZE] = 0;
-    reg[PA_SU_POINT_MINMAX] = 0;
-    reg[PA_SU_LINE_CNTL] = (8 << PA_SU_LINE_CNTL__WIDTH_shift);
-    reg[PA_SC_LINE_STIPPLE] = 0;
-    reg[VGT_OUTPUT_PATH_CNTL] = 0;
-    reg[VGT_HOS_CNTL] = 0;
-    reg[VGT_HOS_MAX_TESS_LEVEL] = 0;
-    reg[VGT_HOS_MIN_TESS_LEVEL] = 0;
-    reg[VGT_HOS_REUSE_DEPTH] = 0;
-    reg[VGT_GROUP_PRIM_TYPE] = 0;
-    reg[VGT_GROUP_FIRST_DECR] = 0;
-    reg[VGT_GROUP_DECR] = 0;
-    reg[VGT_GROUP_VECT_0_CNTL] = {0, 0};
-    reg[VGT_GROUP_VECT_0_FMT_CNTL] = {0, 0};
-    reg[VGT_GS_MODE] = 0;
-    reg[VGT_PRIMITIVEID_EN] = 0;
-    reg[VGT_MULTI_PRIM_IB_RESET_EN] = 0;
-    reg[VGT_SHADER_STAGES_EN] = 0;
-    reg[VGT_STRMOUT_CONFIG] = {0, 0};
+    {
+      asic_cmd reg(this);
+      reg[SQ_PGM_RESOURCES_FS] = 0; //we won't use fetch shaders
+      
+      reg[VGT_MAX_VTX_INDX] = 0xFFFFFFFF;
+      reg[VGT_MIN_VTX_INDX] = 0;
+      reg[VGT_INDX_OFFSET] = 0;
+      reg[VGT_MULTI_PRIM_IB_RESET_INDX] = 0;
+      
+      reg[VGT_INSTANCE_STEP_RATE_0] = {0, 0};
+      reg[VGT_REUSE_OFF] = 0;
+      reg[VGT_VTX_CNT_EN] = 0;
+      
+      reg[PA_SU_POINT_SIZE] = 0;
+      reg[PA_SU_POINT_MINMAX] = 0;
+      reg[PA_SU_LINE_CNTL] = (8 << PA_SU_LINE_CNTL__WIDTH_shift);
+      reg[PA_SC_LINE_STIPPLE] = 0;
+      reg[VGT_OUTPUT_PATH_CNTL] = 0;
+      reg[VGT_HOS_CNTL] = 0;
+      reg[VGT_HOS_MAX_TESS_LEVEL] = 0;
+      reg[VGT_HOS_MIN_TESS_LEVEL] = 0;
+      reg[VGT_HOS_REUSE_DEPTH] = 0;
+      reg[VGT_GROUP_PRIM_TYPE] = 0;
+      reg[VGT_GROUP_FIRST_DECR] = 0;
+      reg[VGT_GROUP_DECR] = 0;
+      reg[VGT_GROUP_VECT_0_CNTL] = {0, 0};
+      reg[VGT_GROUP_VECT_0_FMT_CNTL] = {0, 0};
+      reg[VGT_GS_MODE] = 0;
+      reg[VGT_PRIMITIVEID_EN] = 0;
+      reg[VGT_MULTI_PRIM_IB_RESET_EN] = 0;
+      reg[VGT_SHADER_STAGES_EN] = 0;
+      reg[VGT_STRMOUT_CONFIG] = {0, 0};
+    }
 }
 
 void r800_state::set_default_sq()
@@ -730,7 +756,7 @@ void asic_cmd::send_packet3(uint32_t cmd, std::vector<uint32_t> vals)
 
 void asic_cmd::packet0(uint32_t reg, uint32_t num)
 {
-     if ((reg) >= SET_CONFIG_REG_offset && (reg) < SET_CONFIG_REG_end) {	
+    if ((reg) >= SET_CONFIG_REG_offset && (reg) < SET_CONFIG_REG_end) {	
 	packet3(IT_SET_CONFIG_REG, (num) + 1);			
 	write_dword(((reg) - SET_CONFIG_REG_offset) >> 2);                  
     } else if ((reg) >= SET_CONTEXT_REG_offset && (reg) < SET_CONTEXT_REG_end) { 
@@ -816,7 +842,6 @@ asic_cmd::asic_cmd_regsetter asic_cmd::operator[](uint32_t index)
   return asic_cmd::asic_cmd_regsetter(this, index, false);
 }
 
-
 void r800_state::set_default_state()
 {
   start_3d();
@@ -831,6 +856,59 @@ void r800_state::set_default_state()
   }
 }
 
+void r800_state::set_spi_defaults()
+{
+  asic_cmd reg(this);
+ 
+  reg[SPI_VS_OUT_CONFIG] = 0;
+  reg[SPI_VS_OUT_ID_0] = 0;
+  reg[SPI_INTERP_CONTROL_0] = 0;
+  reg[SPI_PS_INPUT_CNTL_0] = {0, 0};
+  reg[SPI_PS_IN_CONTROL_0] = {LINEAR_GRADIENT_ENA_bit, 0};
+  reg[SPI_INPUT_Z] = 0;
+  reg[SPI_FOG_CNTL] = 0;
+  reg[SPI_BARYC_CNTL] = LINEAR_CENTROID_ENA__X_ON_AT_CENTROID << LINEAR_CENTROID_ENA_shift;
+  reg[SPI_PS_IN_CONTROL_2] = vector<uint32_t>{0, 0, 0};
+}
+
+void r800_state::set_draw_auto(int num_indices)
+{   
+  asic_cmd reg(this);
+  reg[VGT_PRIMITIVE_TYPE] = DI_PT_NONE; //or POINTLIST
+  reg.packet3(IT_INDEX_TYPE, 1);
+  reg.write_dword(DI_INDEX_SIZE_16_BIT); //or 32 bits
+  reg.packet3(IT_NUM_INSTANCES, 1);
+  reg.write_dword(1);
+  reg.packet3(IT_DRAW_INDEX_AUTO, 2);
+  reg.write_dword(num_indices);
+  reg.write_dword(DI_SRC_SEL_AUTO_INDEX);
+}
+
+void r800_state::set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc_addr, struct radeon_bo *bo, uint32_t rdomains, uint32_t wdomain)
+{
+    uint32_t cp_coher_size;
+    if (size == 0xffffffff)
+	cp_coher_size = 0xffffffff;
+    else
+	cp_coher_size = ((size + 255) >> 8);
+
+    uint32_t poll_interval = 10;
+    
+    asic_cmd reg(this);
+    
+    reg.packet3(IT_SURFACE_SYNC, 4);
+    reg.write_dword(sync_type);
+    reg.write_dword(cp_coher_size);
+    reg.write_dword((mc_addr >> 8));
+    reg.write_dword(poll_interval);
+    reg.reloc(bo, rdomains, wdomain);
+}
+
+void r800_state::set_dummy_render_target()
+{
+  
+}
+
 void r800_state::flush_cs()
 {
   //should unmap and unref bo-s first?
@@ -838,32 +916,86 @@ void r800_state::flush_cs()
   radeon_cs_erase(cs);
 }
 
-void r800_state::prepare_compute_shader(compute_shader* sh)
+void r800_state::upload_dummy_ps()
 {
-  //this code wont really work until we fixed it up....
+  assert(radeon_bo_map(dummy_bo_ps, 1) == 0);
+  memcpy(dummy_bo_ps->ptr, dummy_ps_shader_binary, sizeof(dummy_ps_shader_binary));
+  radeon_bo_unmap(dummy_bo_ps);
+}
+
+void r800_state::setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset)
+{
+  assert(cache_id < SQ_ALU_CONST_BUFFER_SIZE_VS_0_num);
   
   {
     asic_cmd reg(this);
-    reg[SQ_PGM_START_PS] = 0;
-    reg.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
+    
+    reg[SQ_ALU_CONST_BUFFER_SIZE_VS_0+cache_id] = size;
+  }
+  {
+    asic_cmd reg(this);
+    assert(offset & 0xFF == 0);
+    reg[SQ_ALU_CONST_CACHE_VS_0+cache_id] = offset >> 8;
+    reg.reloc(cbo, radeon_bo_get_src_domain(cbo), 0);
   }
   
-  asic_cmd reg(this);
- 
-  reg[SQ_PGM_RESOURCES_PS] = {
-    sh->num_gprs | (sh->stack_size << STACK_SIZE_shift) | PRIME_CACHE_ENABLE,
-    SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
-  };
+  assert(cache_id < SQ_ALU_CONST_BUFFER_SIZE_PS_0_num);
   
-  reg[SQ_GPR_RESOURCE_MGMT_1] = sh->num_gprs | (sh->temp_gprs << NUM_CLAUSE_TEMP_GPRS_shift); 
+  {
+    asic_cmd reg(this);
+    
+    reg[SQ_ALU_CONST_BUFFER_SIZE_PS_0+cache_id] = size;
+  }
+  {
+    asic_cmd reg(this);
+    assert(offset & 0xFF == 0);
+    reg[SQ_ALU_CONST_CACHE_PS_0+cache_id] = offset >> 8;
+    reg.reloc(cbo, radeon_bo_get_src_domain(cbo), 0);
+  }
+}
+
+void r800_state::prepare_compute_shader(compute_shader* sh)
+{
+  //we actually prepare a PS VS pair, and use the VS
+
+  {
+    asic_cmd reg(this);
+    reg[SQ_PGM_START_PS] = 0;
+    reg.reloc(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
+  }
   
-  reg[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = sh->global_gprs << CS_GGPR_BASE_shift;
-  reg[SQ_LDS_ALLOC_PS] = sh->lds_alloc; //in 32 bit words
-  reg[SQ_THREAD_RESOURCE_MGMT] = sh->thread_num;
+  {
+    asic_cmd reg(this);
+    reg[SQ_PGM_RESOURCES_PS] = {
+      (/*num_gprs*/1 | (0 << STACK_SIZE_shift)),
+      SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
+    };
+  }
   
-  reg[SQ_STACK_RESOURCE_MGMT_1] = sh->stack_size;
-  reg[SQ_PGM_EXPORTS_PS] = 0;
+  {
+    asic_cmd reg(this);
+    reg[SQ_PGM_START_VS] = 0;
+    reg.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
+  }
+
+  {
+    asic_cmd reg(this);
+    reg[SQ_PGM_RESOURCES_VS] = {
+      (sh->num_gprs | (sh->stack_size << STACK_SIZE_shift)) | PRIME_CACHE_ENABLE,
+      SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
+    };
+  }
   
+  {
+    asic_cmd reg(this);
+    
+    reg[SQ_LDS_ALLOC_PS] = sh->lds_alloc; //in 32 bit words
+    reg[SQ_GLOBAL_GPR_RESOURCE_MGMT_1] = (0 << PS_GGPR_BASE_shift) | (sh->global_gprs << VS_GGPR_BASE_shift);
+    reg[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = 0;
+    reg[SQ_THREAD_RESOURCE_MGMT] = (sq_conf.num_ps_threads << NUM_PS_THREADS_shift) | (sh->thread_num << NUM_VS_THREADS_shift);
+    reg[SQ_STACK_RESOURCE_MGMT_1] = (1 << NUM_PS_STACK_ENTRIES_shift) | (sh->stack_size << NUM_VS_STACK_ENTRIES_shift);
+    reg[SQ_PGM_EXPORTS_PS] = 0; 
+  }
 }
 
 
