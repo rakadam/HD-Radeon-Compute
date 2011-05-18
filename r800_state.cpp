@@ -113,6 +113,7 @@ r800_state::r800_state(int fd) : fd(fd)
 
   dummy_bo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   dummy_bo_ps = bo_open(sizeof(dummy_ps_shader_binary), 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  dummy_bo_cb = bo_open(8*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
 }
 
 r800_state::~r800_state()
@@ -906,7 +907,108 @@ void r800_state::set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc
 
 void r800_state::set_dummy_render_target()
 {
-  
+/*   BEGIN_BATCH(3 + 2);
+    EREG(CB_COLOR0_BASE + (0x3c * cb_conf->id), (cb_conf->base >> 8));
+    RELOC_BATCH(cb_conf->bo, 0, domain);
+    END_BATCH();*/
+    
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_BASE] = 0;
+      reg.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+
+    /* Set CMASK & FMASK buffer to the offset of color buffer as
+     * we don't use those this shouldn't cause any issue and we
+     * then have a valid cmd stream
+     */
+/*    BEGIN_BATCH(3 + 2);
+    EREG(CB_COLOR0_CMASK + (0x3c * cb_conf->id), (0     >> 8));
+    RELOC_BATCH(cb_conf->bo, 0, domain);
+    END_BATCH();*/
+    
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_CMASK] = 0;
+      reg.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+    
+//     BEGIN_BATCH(3 + 2);
+//     EREG(CB_COLOR0_FMASK + (0x3c * cb_conf->id), (0     >> 8));
+//     RELOC_BATCH(cb_conf->bo, 0, domain);
+//     END_BATCH();
+
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_FMASK] = 0;
+      reg.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+    
+    /* tiling config */
+/*    BEGIN_BATCH(3 + 2);
+    EREG(CB_COLOR0_ATTRIB + (0x3c * cb_conf->id), cb_color_attrib);
+    RELOC_BATCH(cb_conf->bo, 0, domain);
+    END_BATCH();*/
+    
+   {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_ATTRIB] = CB_COLOR0_ATTRIB__NON_DISP_TILING_ORDER_bit;
+      reg.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+ 
+/*    BEGIN_BATCH(3 + 2);
+    EREG(CB_COLOR0_INFO + (0x3c * cb_conf->id), cb_color_info);
+    RELOC_BATCH(cb_conf->bo, 0, domain);
+    END_BATCH();*/
+    
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_INFO] = 
+	(COLOR_8 << CB_COLOR0_INFO__FORMAT_shift) |
+	(3 << COMP_SWAP_shift) |
+	(EXPORT_4C_16BPC << SOURCE_FORMAT_shift) |
+	(BLEND_CLAMP_bit);
+	
+      reg.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+
+
+//     BEGIN_BATCH(33);
+//     EREG(CB_COLOR0_PITCH + (0x3c * cb_conf->id), pitch);
+//     EREG(CB_COLOR0_SLICE + (0x3c * cb_conf->id), slice);
+//     EREG(CB_COLOR0_VIEW + (0x3c * cb_conf->id), 0);
+//     EREG(CB_COLOR0_DIM + (0x3c * cb_conf->id), cb_color_dim);
+//     EREG(CB_COLOR0_CMASK_SLICE + (0x3c * cb_conf->id), 0);
+//     EREG(CB_COLOR0_FMASK_SLICE + (0x3c * cb_conf->id), 0);
+//     PACK0(CB_COLOR0_CLEAR_WORD0 + (0x3c * cb_conf->id), 4);
+//     E32(0);
+//     E32(0);
+//     E32(0);
+//     E32(0);
+//     EREG(CB_TARGET_MASK,                      (cb_conf->pmask << TARGET0_ENABLE_shift));
+//     EREG(CB_COLOR_CONTROL,                    (EVERGREEN_ROP[cb_conf->rop] |
+// 					       (CB_NORMAL << CB_COLOR_CONTROL__MODE_shift)));
+//     EREG(CB_BLEND0_CONTROL,                   cb_conf->blendcntl);
+//     END_BATCH();
+
+    {
+      asic_cmd reg(this);
+      reg[CB_COLOR0_PITCH] = (16 / 8) - 1;
+      reg[CB_COLOR0_SLICE] = ((16*16) / 64) - 1;
+      reg[CB_COLOR0_VIEW] = 0;
+      reg[CB_COLOR0_DIM] =  (15 << WIDTH_MAX_shift) | ( 15 << HEIGHT_MAX_shift);
+      reg[CB_COLOR0_CMASK_SLICE] = 0;
+      reg[CB_COLOR0_FMASK_SLICE] = 0;
+      reg[CB_COLOR0_CLEAR_WORD0] = {0, 0, 0, 0};
+      reg[CB_TARGET_MASK] = 8 << TARGET0_ENABLE_shift;
+      reg[CB_COLOR_CONTROL] = CB_NORMAL << CB_COLOR_CONTROL__MODE_shift;
+      reg[CB_BLEND0_CONTROL] = 0;
+    }
 }
 
 void r800_state::flush_cs()
@@ -921,6 +1023,42 @@ void r800_state::upload_dummy_ps()
   assert(radeon_bo_map(dummy_bo_ps, 1) == 0);
   memcpy(dummy_bo_ps->ptr, dummy_ps_shader_binary, sizeof(dummy_ps_shader_binary));
   radeon_bo_unmap(dummy_bo_ps);
+}
+
+void r800_state::set_dummy_scissors()
+{
+  {
+    asic_cmd reg(this);
+    
+    reg[PA_SC_GENERIC_SCISSOR_TL] = {
+      ((0 << PA_SC_GENERIC_SCISSOR_TL__TL_X_shift) |
+	(0 << PA_SC_GENERIC_SCISSOR_TL__TL_Y_shift) |
+	WINDOW_OFFSET_DISABLE_bit),
+      ((16 << PA_SC_GENERIC_SCISSOR_BR__BR_X_shift) |
+	(16 << PA_SC_GENERIC_SCISSOR_TL__TL_Y_shift))
+    };
+  }
+  {
+    asic_cmd reg(this);
+    
+    reg[PA_SC_SCREEN_SCISSOR_TL] = {
+      ((0 << PA_SC_SCREEN_SCISSOR_TL__TL_X_shift) |
+	(0 << PA_SC_SCREEN_SCISSOR_TL__TL_Y_shift)),
+      ((16 << PA_SC_SCREEN_SCISSOR_BR__BR_X_shift) |
+	(16 << PA_SC_SCREEN_SCISSOR_BR__BR_Y_shift))
+    };
+  }
+  {
+    asic_cmd reg(this);
+    
+    reg[PA_SC_WINDOW_SCISSOR_TL] = {
+      ((0 << PA_SC_WINDOW_SCISSOR_TL__TL_X_shift) |
+	(0 << PA_SC_WINDOW_SCISSOR_TL__TL_Y_shift) |
+	WINDOW_OFFSET_DISABLE_bit),
+      ((16 << PA_SC_WINDOW_SCISSOR_BR__BR_X_shift) |
+	(16 << PA_SC_WINDOW_SCISSOR_BR__BR_Y_shift))
+    };
+  }
 }
 
 void r800_state::setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset)
@@ -963,7 +1101,6 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
     reg[SQ_PGM_START_PS] = 0;
     reg.reloc(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
   }
-  
   {
     asic_cmd reg(this);
     reg[SQ_PGM_RESOURCES_PS] = {
@@ -971,13 +1108,11 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
       SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
     };
   }
-  
   {
     asic_cmd reg(this);
     reg[SQ_PGM_START_VS] = 0;
     reg.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
   }
-
   {
     asic_cmd reg(this);
     reg[SQ_PGM_RESOURCES_VS] = {
@@ -985,7 +1120,6 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
       SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
     };
   }
-  
   {
     asic_cmd reg(this);
     

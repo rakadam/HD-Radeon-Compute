@@ -9,6 +9,8 @@ extern "C" {
 #include <radeon_bo_gem.h>
 };
 
+#include "cs_image.h"
+
 #include <cstdint>
 
 #define RADEON_BUFFER_SIZE		65536
@@ -252,22 +254,6 @@ typedef struct {
 
 class r800_state;
 
-struct compute_shader
-{
-  compute_shader(r800_state* state, const std::vector<char>& binary);
-  
-  struct radeon_bo* binary_code_bo;
-  
-  int alloc_size;
-  int lds_alloc; //in 32bit words
-  int num_gprs;
-  int temp_gprs;
-  int global_gprs;
-  int stack_size;
-  int thread_num; //per SIMD
-  int dyn_gpr_limit;
-};
-
 class asic_cmd;
 
 class r800_state
@@ -285,7 +271,7 @@ class r800_state
   
   //TODO: use  radeon_cs_set_limit(info->cs, RADEON_GEM_DOMAIN_VRAM, 
   
-  struct radeon_bo *dummy_bo, *dummy_bo_ps;
+  struct radeon_bo *dummy_bo, *dummy_bo_ps, *dummy_bo_cb;
   
   public:
     r800_state(int fd);
@@ -323,12 +309,13 @@ class r800_state
     void set_dummy_render_target();
     void flush_cs();
     void upload_dummy_ps();
+    void set_dummy_scissors();
     
     void set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc_addr, struct radeon_bo *bo, uint32_t rdomains, uint32_t wdomain);
     
     void setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset); //for VS only for now, later CS
     
-    void prepare_compute_shader(compute_shader* sh);
+    void prepare_compute_shader(compute_shader* sh); //A VS for now.. and a dummy PS
 };
 
 class asic_cmd
