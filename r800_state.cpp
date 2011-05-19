@@ -10,8 +10,6 @@
 
 using namespace std;
 
-
-
 #define CP_PACKET0(reg, n)                                              \
         (RADEON_CP_PACKET0 | ((n) << 16) | ((reg) >> 2))
 #define CP_PACKET1(reg0, reg1)                                          \
@@ -238,7 +236,6 @@ void r800_state::start_3d()
     cs_end();
 }
 
-
 void r800_state::sq_setup()
 {
     uint32_t sq_config, sq_gpr_resource_mgmt_1, sq_gpr_resource_mgmt_2, sq_gpr_resource_mgmt_3;
@@ -322,6 +319,7 @@ void r800_state::sq_setup()
     {
       asic_cmd reg(this);
       reg[DB_Z_INFO] = 0;
+      cout << dummy_bo << endl;
       reg.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
     }
     
@@ -673,12 +671,14 @@ asic_cmd::asic_cmd(asic_cmd&& b) : queue(b.queue), state(b.state), reloc_num(b.r
 
 void asic_cmd::reloc(struct radeon_bo * bo, uint32_t rd, uint32_t wd)
 {
+//   cout << "ppr: " << bo << endl;
   queue.push_back(token(bo, rd, wd));
   reloc_num++;
 }
 
 void asic_cmd::write_dword(uint32_t dword)
 {
+//   cout << "ppd" << endl;
   queue.push_back(token(dword));
 }
 
@@ -774,18 +774,31 @@ asic_cmd::~asic_cmd()
     return;
   }
   
-  int ndw = queue.size() + reloc_num*2;
+  static int packet_num = 0;
   
+  
+//   cout << packet_num << endl;
+  
+  int ndw = queue.size() + reloc_num;
+//   cout << "emit: " << ndw << " " << queue.size() << " " << reloc_num << endl;
+ 
   radeon_cs_begin(state->cs, ndw, __FILE__, __func__, __LINE__);
 
   for (int i = 0; i < int(queue.size()); i++)
   {
+    packet_num++;
     if (queue[i].bo_reloc)
     {
-      radeon_cs_write_reloc(state->cs, queue[i].bo, queue[i].rd, queue[i].wd, 0);
+//       cout << "reloc:" << queue[i].bo << endl;
+//       radeon_bo_ref(queue[i].bo);
+      if (radeon_cs_write_reloc(state->cs, queue[i].bo, queue[i].rd, queue[i].wd, 0))
+      {
+	cout << "reloc error" << endl;
+      }
     }
     else
     {
+//       cout << "dw: " << queue[i].dw << endl;
       radeon_cs_write_dword(state->cs, queue[i].dw); 
     }
   }
@@ -858,6 +871,69 @@ void r800_state::set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc
     reg.write_dword((mc_addr >> 8));
     reg.write_dword(poll_interval);
     reg.reloc(bo, rdomains, wdomain);
+}
+
+void r800_state::set_vtx_resource(vtx_resource_t *res, uint32_t domain)
+{
+    uint32_t sq_vtx_constant_word2, sq_vtx_constant_word3, sq_vtx_constant_word4;
+
+    sq_vtx_constant_word2 = ((((res->vb_addr) >> 32) & BASE_ADDRESS_HI_mask) |
+			     ((res->vtx_size_dw << 2) << SQ_VTX_CONSTANT_WORD2_0__STRIDE_shift) |
+			     (res->format << SQ_VTX_CONSTANT_WORD2_0__DATA_FORMAT_shift) |
+			     (res->num_format_all << SQ_VTX_CONSTANT_WORD2_0__NUM_FORMAT_ALL_shift) |
+			     (res->endian << SQ_VTX_CONSTANT_WORD2_0__ENDIAN_SWAP_shift));
+    if (res->clamp_x)
+	    sq_vtx_constant_word2 |= SQ_VTX_CONSTANT_WORD2_0__CLAMP_X_bit;
+
+    if (res->format_comp_all)
+	    sq_vtx_constant_word2 |= SQ_VTX_CONSTANT_WORD2_0__FORMAT_COMP_ALL_bit;
+
+    if (res->srf_mode_all)
+	    sq_vtx_constant_word2 |= SQ_VTX_CONSTANT_WORD2_0__SRF_MODE_ALL_bit;
+
+    sq_vtx_constant_word3 = ((res->dst_sel_x << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_X_shift) |
+			     (res->dst_sel_y << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_Y_shift) |
+			     (res->dst_sel_z << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_Z_shift) |
+			     (res->dst_sel_w << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_W_shift));
+
+    if (res->uncached)
+	sq_vtx_constant_word3 |= SQ_VTX_CONSTANT_WORD3_0__UNCACHED_bit;
+
+    /* XXX ??? */
+    sq_vtx_constant_word4 = 0;
+
+    set_surface_sync(TC_ACTION_ENA_bit,
+		    res->offset, 0,
+		    res->bo,
+		    domain, 0);
+
+//     BEGIN_BATCH(10 + 2);
+//     PACK0(SQ_FETCH_RESOURCE + res->id * SQ_FETCH_RESOURCE_offset, 8);
+//     E32(res->vb_addr & 0xffffffff);				// 0: BASE_ADDRESS
+//     E32((res->vtx_num_entries << 2) - 1);			// 1: SIZE
+//     E32(sq_vtx_constant_word2);	// 2: BASE_HI, STRIDE, CLAMP, FORMAT, ENDIAN
+//     E32(sq_vtx_constant_word3);		// 3: swizzles
+//     E32(sq_vtx_constant_word4);		// 4: num elements
+//     E32(0);							// 5: n/a
+//     E32(0);							// 6: n/a
+//     E32(SQ_TEX_VTX_VALID_BUFFER << SQ_VTX_CONSTANT_WORD7_0__TYPE_shift);	// 7: TYPE
+//     RELOC_BATCH(res->bo, domain, 0);
+//     END_BATCH();
+
+  asic_cmd reg(this);
+  
+  reg[SQ_FETCH_RESOURCE + res->id * SQ_FETCH_RESOURCE_offset] = {
+      uint32_t(res->vb_addr & 0xffffffff),
+      (res->vtx_num_entries << 2) - 1,
+      sq_vtx_constant_word2,
+      sq_vtx_constant_word3,
+      sq_vtx_constant_word4,
+      0,
+      0,
+      SQ_TEX_VTX_VALID_BUFFER << SQ_VTX_CONSTANT_WORD7_0__TYPE_shift
+  };
+  
+  reg.reloc(res->bo, domain, 0);
 }
 
 void r800_state::set_dummy_render_target()
@@ -1020,6 +1096,9 @@ void r800_state::setup_const_cache(int cache_id, struct radeon_bo* cbo, int size
 {
   assert(cache_id < SQ_ALU_CONST_BUFFER_SIZE_VS_0_num);
   
+  set_surface_sync(SH_ACTION_ENA_bit,
+		  size, offset,
+		  cbo, RADEON_GEM_DOMAIN_VRAM, 0);
   {
     asic_cmd reg(this);
     
@@ -1051,10 +1130,18 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
 {
   //we actually prepare a PS VS pair, and use the VS
 
+  set_surface_sync(SH_ACTION_ENA_bit,
+		  sh->alloc_size, 0,
+		  sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+		  
+  set_surface_sync(SH_ACTION_ENA_bit,
+		  sizeof(dummy_ps_shader_binary), 0,
+		  dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
+
   {
     asic_cmd reg(this);
     reg[SQ_PGM_START_PS] = 0;
-    reg.reloc(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
+    reg.reloc(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
   }
   {
     asic_cmd reg(this);
@@ -1066,7 +1153,7 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
   {
     asic_cmd reg(this);
     reg[SQ_PGM_START_VS] = 0;
-    reg.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
+    reg.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
   }
   {
     asic_cmd reg(this);
@@ -1087,4 +1174,35 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
   }
 }
 
+void r800_state::execute_shader(compute_shader* sh)
+{
+  add_persistent_bo(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+  add_persistent_bo(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+  add_persistent_bo(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+  add_persistent_bo(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
+  add_persistent_bo(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
+  
+  int ret = radeon_cs_space_check(cs);
+  if (ret) { 
+	  fprintf(stderr,"fail\n");
+	  exit(-1);
+  }
+
+  set_default_state();
+  
+  set_dummy_scissors();
+  
+  prepare_compute_shader(sh);
+  
+  set_dummy_render_target();
+  set_spi_defaults();
+  
+//   setup_const_cache
+
+//   evergreen_set_vtx_resource
+
+  set_draw_auto(1);
+  
+  set_surface_sync((CB_ACTION_ENA_bit | CB0_DEST_BASE_ENA_bit), 16*16, 0, dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
+}
 

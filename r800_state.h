@@ -165,6 +165,7 @@ typedef struct {
 /* Vertex buffer / vtx resource */
 typedef struct {
     int id;
+    uint32_t offset;
     uint64_t vb_addr;
     uint32_t vtx_num_entries;
     uint32_t vtx_size_dw;
@@ -310,12 +311,15 @@ class r800_state
     void flush_cs();
     void upload_dummy_ps();
     void set_dummy_scissors();
-    
+   
     void set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc_addr, struct radeon_bo *bo, uint32_t rdomains, uint32_t wdomain);
-    
+    void set_vtx_resource(vtx_resource_t *res, uint32_t domain);
+
     void setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset); //for VS only for now, later CS
     
     void prepare_compute_shader(compute_shader* sh); //A VS for now.. and a dummy PS
+    
+    void execute_shader(compute_shader* sh);
 };
 
 class asic_cmd
@@ -323,7 +327,7 @@ class asic_cmd
   struct token
   {
     token(uint32_t dw) : bo_reloc(false) ,dw(dw) {}
-    token(struct radeon_bo *, uint32_t rd, uint32_t wd) : bo_reloc(true), dw(0), bo(bo), rd(rd), wd(wd) {}
+    token(struct radeon_bo *bo, uint32_t rd, uint32_t wd) : bo_reloc(true), dw(0), bo(bo), rd(rd), wd(wd) {}
     bool bo_reloc;
     uint32_t dw;
     struct radeon_bo *bo;

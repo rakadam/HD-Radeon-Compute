@@ -37,9 +37,10 @@ int main()
 //      if (0)
      {
       r800_state state(fd);
-      state.set_default_state();
+      compute_shader sh(&state, "dummy_vs.bin");
+      state.execute_shader(&sh);
       state.flush_cs();
-      sleep(1);
+//       sleep(1);
      }
 //    int fd = drmOpen("/dev/dri/card0", "pci:0000:01:00.0");
 //     cout << fd << endl;

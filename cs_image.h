@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <string>
 
 struct cs_image_header
 {
@@ -25,7 +26,8 @@ struct radeon_bo;
 struct compute_shader
 {
   compute_shader(r800_state* state, const std::vector<char>& binary);
-  
+  compute_shader(r800_state* state, std::string fname); //open raw for now
+
   struct radeon_bo* binary_code_bo;
   
   int alloc_size; //allocated bo size in bytes
@@ -37,6 +39,9 @@ struct compute_shader
   int thread_num; //per SIMD
   int dyn_gpr_limit; //WTF?
 };
+
+
+// compute_shader cs_read_from_file(std::string fname);
 
 #endif
 
