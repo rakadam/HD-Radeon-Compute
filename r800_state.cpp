@@ -67,6 +67,7 @@ r800_state::r800_state(int fd) : fd(fd)
   dummy_bo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   dummy_bo_ps = bo_open(sizeof(dummy_ps_shader_binary), 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   dummy_bo_cb = bo_open(8*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  dummy_vbo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
 }
 
 r800_state::~r800_state()
@@ -360,6 +361,7 @@ void r800_state::sq_setup()
       reg[PA_CL_ENHANCE] = 3 << 1 | 1;
       reg[SQ_VTX_SEMANTIC] = vector<uint32_t>(SQ_VTX_SEMANTIC_num);
       reg[PA_CL_CLIP_CNTL] = 0;
+      
       reg[PA_SC_VPORT_ZMIN_0] = 0.0f;
       reg[PA_SC_VPORT_ZMAX_0] = 1.0f;
       reg[DB_SHADER_CONTROL] = 0;
@@ -373,11 +375,12 @@ void r800_state::sq_setup()
       reg[DB_STENCIL_CLEAR] = 0;
       reg[DB_DEPTH_CLEAR] = 0;
       reg[DB_ALPHA_TO_MASK] = 0;
-      
+    
       reg[SX_MISC] = 0;
       
       reg[SX_ALPHA_TEST_CONTROL] = {0, 0, 0, 0, 0};
-      reg[CB_SHADER_MASK] = 0;
+      reg[CB_SHADER_MASK] = OUTPUT0_ENABLE_mask;
+     
       reg[PA_SC_WINDOW_OFFSET] = 0;
       reg[PA_SC_CLIPRECT_RULE] = CLIP_RULE_mask;
       reg[PA_SC_EDGERULE] = 0xAAAAAAAA;
@@ -828,22 +831,24 @@ void r800_state::set_default_state()
 void r800_state::set_spi_defaults()
 {
   asic_cmd reg(this);
- 
-  reg[SPI_VS_OUT_CONFIG] = 0;
-  reg[SPI_VS_OUT_ID_0] = 0;
-  reg[SPI_INTERP_CONTROL_0] = 0;
+
   reg[SPI_PS_INPUT_CNTL_0] = {0, 0};
-  reg[SPI_PS_IN_CONTROL_0] = {LINEAR_GRADIENT_ENA_bit, 0};
   reg[SPI_INPUT_Z] = 0;
   reg[SPI_FOG_CNTL] = 0;
   reg[SPI_BARYC_CNTL] = LINEAR_CENTROID_ENA__X_ON_AT_CENTROID << LINEAR_CENTROID_ENA_shift;
   reg[SPI_PS_IN_CONTROL_2] = vector<uint32_t>{0, 0, 0};
+
+  reg[SPI_VS_OUT_CONFIG] = 0;
+  reg[SPI_VS_OUT_ID_0] = 0;
+  reg[SPI_INTERP_CONTROL_0] = 0;
+  reg[SPI_PS_IN_CONTROL_0] = {LINEAR_GRADIENT_ENA_bit, 0};
+  
 }
 
 void r800_state::set_draw_auto(int num_indices)
 {   
   asic_cmd reg(this);
-  reg[VGT_PRIMITIVE_TYPE] = DI_PT_NONE; //or POINTLIST
+  reg[VGT_PRIMITIVE_TYPE] = DI_PT_RECTLIST; //or POINTLIST
   reg.packet3(IT_INDEX_TYPE, 1);
   reg.write_dword(DI_INDEX_SIZE_16_BIT); //or 32 bits
   reg.packet3(IT_NUM_INSTANCES, 1);
@@ -1036,8 +1041,8 @@ void r800_state::set_dummy_render_target()
       reg[CB_COLOR0_CMASK_SLICE] = 0;
       reg[CB_COLOR0_FMASK_SLICE] = 0;
       reg[CB_COLOR0_CLEAR_WORD0] = {0, 0, 0, 0};
-      reg[CB_TARGET_MASK] = 8 << TARGET0_ENABLE_shift;
-      reg[CB_COLOR_CONTROL] = CB_NORMAL << CB_COLOR_CONTROL__MODE_shift;
+      reg[CB_TARGET_MASK] = 15 << TARGET0_ENABLE_shift;
+      reg[CB_COLOR_CONTROL] = 0x00cc0000 | (CB_NORMAL << CB_COLOR_CONTROL__MODE_shift);
       reg[CB_BLEND0_CONTROL] = 0;
     }
 }
@@ -1106,7 +1111,7 @@ void r800_state::setup_const_cache(int cache_id, struct radeon_bo* cbo, int size
   }
   {
     asic_cmd reg(this);
-    assert(offset & 0xFF == 0);
+    assert((offset & 0xFF) == 0);
     reg[SQ_ALU_CONST_CACHE_VS_0+cache_id] = offset >> 8;
     reg.reloc(cbo, radeon_bo_get_src_domain(cbo), 0);
   }
@@ -1120,7 +1125,7 @@ void r800_state::setup_const_cache(int cache_id, struct radeon_bo* cbo, int size
   }
   {
     asic_cmd reg(this);
-    assert(offset & 0xFF == 0);
+    assert((offset & 0xFF) == 0);
     reg[SQ_ALU_CONST_CACHE_PS_0+cache_id] = offset >> 8;
     reg.reloc(cbo, radeon_bo_get_src_domain(cbo), 0);
   }
@@ -1170,17 +1175,20 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
     reg[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = 0;
     reg[SQ_THREAD_RESOURCE_MGMT] = (sq_conf.num_ps_threads << NUM_PS_THREADS_shift) | (sh->thread_num << NUM_VS_THREADS_shift);
     reg[SQ_STACK_RESOURCE_MGMT_1] = (1 << NUM_PS_STACK_ENTRIES_shift) | (sh->stack_size << NUM_VS_STACK_ENTRIES_shift);
-    reg[SQ_PGM_EXPORTS_PS] = 0; 
+    reg[SQ_PGM_EXPORTS_PS] = 2; 
   }
 }
 
 void r800_state::execute_shader(compute_shader* sh)
 {
+  upload_dummy_ps();
+  
   add_persistent_bo(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
   add_persistent_bo(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
   add_persistent_bo(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
   add_persistent_bo(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
   add_persistent_bo(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
+  add_persistent_bo(dummy_vbo, RADEON_GEM_DOMAIN_VRAM, 0);
   
   int ret = radeon_cs_space_check(cs);
   if (ret) { 
@@ -1197,11 +1205,24 @@ void r800_state::execute_shader(compute_shader* sh)
   set_dummy_render_target();
   set_spi_defaults();
   
-//   setup_const_cache
+  setup_const_cache(0, dummy_bo, 256, 0);
 
-//   evergreen_set_vtx_resource
+  vtx_resource_t vtxr;
+  
+  memset(&vtxr, 0, sizeof(vtxr));
+  
+  vtxr.id = SQ_FETCH_RESOURCE_vs;
+  vtxr.vtx_size_dw = 4;
+  vtxr.vtx_num_entries = 1;
+  vtxr.vb_addr = 0;
+  vtxr.bo = dummy_vbo;
+  vtxr.dst_sel_x       = SQ_SEL_X;
+  vtxr.dst_sel_y       = SQ_SEL_Y;
+  vtxr.dst_sel_z       = SQ_SEL_Z;
+  vtxr.dst_sel_w       = SQ_SEL_W;
+  set_vtx_resource(&vtxr, RADEON_GEM_DOMAIN_VRAM);
 
-  set_draw_auto(1);
+  set_draw_auto(3);
   
   set_surface_sync((CB_ACTION_ENA_bit | CB0_DEST_BASE_ENA_bit), 16*16, 0, dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
 }

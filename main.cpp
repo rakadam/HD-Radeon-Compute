@@ -37,7 +37,7 @@ int main()
 //      if (0)
      {
       r800_state state(fd);
-      compute_shader sh(&state, "dummy_vs.bin");
+      compute_shader sh(&state, "/home/rakadam/Projects/drm_prb/dummy_vs.bin");
       state.execute_shader(&sh);
       state.flush_cs();
 //       sleep(1);

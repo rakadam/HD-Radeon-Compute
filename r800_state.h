@@ -270,9 +270,7 @@ class r800_state
   RADEONChipFamily ChipFamily;
   static void radeon_cs_flush_indirect(r800_state* state);
   
-  //TODO: use  radeon_cs_set_limit(info->cs, RADEON_GEM_DOMAIN_VRAM, 
-  
-  struct radeon_bo *dummy_bo, *dummy_bo_ps, *dummy_bo_cb;
+  struct radeon_bo *dummy_bo, *dummy_bo_ps, *dummy_bo_cb, *dummy_vbo;
   
   public:
     r800_state(int fd);
