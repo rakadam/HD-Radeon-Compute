@@ -1225,5 +1225,7 @@ void r800_state::execute_shader(compute_shader* sh)
   set_draw_auto(3);
   
   set_surface_sync((CB_ACTION_ENA_bit | CB0_DEST_BASE_ENA_bit), 16*16, 0, dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
+  
+  cout << cs->cdw << endl;
 }
 
