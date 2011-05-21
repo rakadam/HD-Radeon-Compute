@@ -868,7 +868,7 @@ void r800_state::set_draw_auto(int num_indices)
   asic_cmd reg(this);
   reg[VGT_PRIMITIVE_TYPE] = DI_PT_RECTLIST; //or POINTLIST
   reg.packet3(IT_INDEX_TYPE, 1);
-  reg.write_dword(DI_INDEX_SIZE_16_BIT); //or 32 bits
+  reg.write_dword(DI_INDEX_SIZE_32_BIT); //or 32 bits
   reg.packet3(IT_NUM_INSTANCES, 1);
   reg.write_dword(1);
   reg.packet3(IT_DRAW_INDEX_AUTO, 2);
