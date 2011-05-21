@@ -7,20 +7,21 @@
 #include <assert.h>
 #include "r800_state.h"
 
+#include "evergreen_reg.h"
 
 using namespace std;
 
 int main()
 {
     char* buf;
-    int size = 500*1024*1024;
+//     int size = 500*1024*1024;
     assert(drmAvailable());
 
-//      int fd = open("/dev/dri/card0", O_RDWR, 0);
+     int fd = open("/dev/dri/card0", O_RDWR, 0);
      
-     int fd = drmOpen(NULL, "pci:0000:00:01.0");
+//      int fd = drmOpen(NULL, "pci:0000:00:01.0");
      
-    struct drm_radeon_gem_info mminfo;
+//     struct drm_radeon_gem_info mminfo;
 
 //     if (!drmCommandWriteRead(fd, DRM_RADEON_GEM_INFO, &mminfo, sizeof(mminfo)))
 //     {
@@ -34,8 +35,32 @@ int main()
      {
       r800_state state(fd);
       compute_shader sh(&state, "/home/rakadam/Projects/drm_prb/dummy_vs.bin");
+      radeon_bo* buffer = state.bo_open(0, 1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+      radeon_bo_map(buffer, 1);
+      uint32_t *ptr = (uint32_t*)buffer->ptr;
+      
+      for (int i = 0; i < 256; i++)
+      {
+	ptr[i] = 0xdeadbeef;
+      }
+      
+      radeon_bo_unmap(buffer);
+      state.set_rat(11, buffer);
       state.execute_shader(&sh);
+      state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 16*16*4, 0, buffer, 0, RADEON_GEM_DOMAIN_VRAM);
       state.flush_cs();
+      
+      radeon_bo_map(buffer, 0);
+      ptr = (uint32_t*)buffer->ptr;
+      
+      for (int i = 0; i < 256; i++)
+      {
+	printf("%.8X ", ptr[i]);
+      }
+      
+      radeon_bo_unmap(buffer);
+      
+      cout << endl;
 //       sleep(1);
      }
 //    int fd = drmOpen("/dev/dri/card0", "pci:0000:01:00.0");

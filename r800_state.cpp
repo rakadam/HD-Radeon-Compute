@@ -1071,13 +1071,21 @@ void r800_state::set_rat(int id, radeon_bo* bo)
   
   assert(id < 12);
   
+  add_persistent_bo(bo, 0, /*radeon_bo_get_src_domain(bo)*/RADEON_GEM_DOMAIN_VRAM);
+  
+  int ret = radeon_cs_space_check(cs);
+  if (ret) { 
+	  fprintf(stderr,"fail\n");
+	  exit(-1);
+  }
+  
   if (id < 8)
   {
     offset = id*0x3c;
   }
   else
   {
-    offset = 8*0x3c + (id-8)*0x30; //FIXME: I guessed it only, should check with agd5f!
+    offset = 8*0x3c + (id-8)*0x1c; //FIXME: I guessed it only, should check with agd5f!
   }
   
 /*   BEGIN_BATCH(3 + 2);
@@ -1085,101 +1093,108 @@ void r800_state::set_rat(int id, radeon_bo* bo)
     RELOC_BATCH(cb_conf->bo, 0, domain);
     END_BATCH();*/
     
+    printf("%.8x\n", CB_COLOR0_BASE + offset);
+    
     {
       asic_cmd reg(this);
       
       reg[CB_COLOR0_BASE + offset] = 0;
       reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
     }
-
-    /* Set CMASK & FMASK buffer to the offset of color buffer as
-     * we don't use those this shouldn't cause any issue and we
-     * then have a valid cmd stream
-     */
-/*    BEGIN_BATCH(3 + 2);
-    EREG(CB_COLOR0_CMASK + (0x3c * cb_conf->id), (0     >> 8));
-    RELOC_BATCH(cb_conf->bo, 0, domain);
-    END_BATCH();*/
-    
-    {
-      asic_cmd reg(this);
-      
-      reg[CB_COLOR0_CMASK + offset] = 0;
-      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
-    
-//     BEGIN_BATCH(3 + 2);
-//     EREG(CB_COLOR0_FMASK + (0x3c * cb_conf->id), (0     >> 8));
-//     RELOC_BATCH(cb_conf->bo, 0, domain);
-//     END_BATCH();
-
-    {
-      asic_cmd reg(this);
-      
-      reg[CB_COLOR0_FMASK + offset] = 0;
-      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
-    
-    /* tiling config */
-/*    BEGIN_BATCH(3 + 2);
-    EREG(CB_COLOR0_ATTRIB + (0x3c * cb_conf->id), cb_color_attrib);
-    RELOC_BATCH(cb_conf->bo, 0, domain);
-    END_BATCH();*/
-    
-   {
-      asic_cmd reg(this);
-      
-      reg[CB_COLOR0_ATTRIB + offset] = CB_COLOR0_ATTRIB__NON_DISP_TILING_ORDER_bit;
-      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
- 
-/*    BEGIN_BATCH(3 + 2);
-    EREG(CB_COLOR0_INFO + (0x3c * cb_conf->id), cb_color_info);
-    RELOC_BATCH(cb_conf->bo, 0, domain);
-    END_BATCH();*/
-    
-    {
-      asic_cmd reg(this);
-      
-      reg[CB_COLOR0_INFO + offset] = 
-	(COLOR_8 << CB_COLOR0_INFO__FORMAT_shift) |
-	(3 << COMP_SWAP_shift) |
-	(EXPORT_4C_16BPC << SOURCE_FORMAT_shift) |
-	(BLEND_CLAMP_bit);
-	
-      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
-
-
-//     BEGIN_BATCH(33);
-//     EREG(CB_COLOR0_PITCH + (0x3c * cb_conf->id), pitch);
-//     EREG(CB_COLOR0_SLICE + (0x3c * cb_conf->id), slice);
-//     EREG(CB_COLOR0_VIEW + (0x3c * cb_conf->id), 0);
-//     EREG(CB_COLOR0_DIM + (0x3c * cb_conf->id), cb_color_dim);
-//     EREG(CB_COLOR0_CMASK_SLICE + (0x3c * cb_conf->id), 0);
-//     EREG(CB_COLOR0_FMASK_SLICE + (0x3c * cb_conf->id), 0);
-//     PACK0(CB_COLOR0_CLEAR_WORD0 + (0x3c * cb_conf->id), 4);
-//     E32(0);
-//     E32(0);
-//     E32(0);
-//     E32(0);
-//     EREG(CB_TARGET_MASK,                      (cb_conf->pmask << TARGET0_ENABLE_shift));
-//     EREG(CB_COLOR_CONTROL,                    (EVERGREEN_ROP[cb_conf->rop] |
-// 					       (CB_NORMAL << CB_COLOR_CONTROL__MODE_shift)));
-//     EREG(CB_BLEND0_CONTROL,                   cb_conf->blendcntl);
-//     END_BATCH();
-
     {
       asic_cmd reg(this);
       reg[CB_COLOR0_PITCH + offset] = (16 / 8) - 1;
       reg[CB_COLOR0_SLICE + offset] = ((16*16) / 64) - 1;
       reg[CB_COLOR0_VIEW + offset] = 0;
-      reg[CB_COLOR0_DIM + offset] =  (15 << WIDTH_MAX_shift) | ( 15 << HEIGHT_MAX_shift);
-      reg[CB_COLOR0_CMASK_SLICE + offset] = 0;
-      reg[CB_COLOR0_FMASK_SLICE + offset] = 0;
-      reg[CB_COLOR0_CLEAR_WORD0 + offset] = {0, 0, 0, 0};
     }
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_INFO + offset] = RAT_bit;
+      
+      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_ATTRIB + offset] = CB_COLOR0_ATTRIB__NON_DISP_TILING_ORDER_bit;
+      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_DIM + offset] =  (15 << WIDTH_MAX_shift) | ( 15 << HEIGHT_MAX_shift);
+    }
+    
+    if (id < 8)
+    {
+      /* Set CMASK & FMASK buffer to the offset of color buffer as
+      * we don't use those this shouldn't cause any issue and we
+      * then have a valid cmd stream
+      */
+  /*    BEGIN_BATCH(3 + 2);
+      EREG(CB_COLOR0_CMASK + (0x3c * cb_conf->id), (0     >> 8));
+      RELOC_BATCH(cb_conf->bo, 0, domain);
+      END_BATCH();*/
+      
+      {
+	asic_cmd reg(this);
+	
+	reg[CB_COLOR0_CMASK + offset] = 0;
+	reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+      }
+      
+  //     BEGIN_BATCH(3 + 2);
+  //     EREG(CB_COLOR0_FMASK + (0x3c * cb_conf->id), (0     >> 8));
+  //     RELOC_BATCH(cb_conf->bo, 0, domain);
+  //     END_BATCH();
+
+      {
+	asic_cmd reg(this);
+	
+	reg[CB_COLOR0_FMASK + offset] = 0;
+	reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+      }
+      
+      /* tiling config */
+  /*    BEGIN_BATCH(3 + 2);
+      EREG(CB_COLOR0_ATTRIB + (0x3c * cb_conf->id), cb_color_attrib);
+      RELOC_BATCH(cb_conf->bo, 0, domain);
+      END_BATCH();*/
+      
   
+  /*    BEGIN_BATCH(3 + 2);
+      EREG(CB_COLOR0_INFO + (0x3c * cb_conf->id), cb_color_info);
+      RELOC_BATCH(cb_conf->bo, 0, domain);
+      END_BATCH();*/
+      
+
+
+  //     BEGIN_BATCH(33);
+  //     EREG(CB_COLOR0_PITCH + (0x3c * cb_conf->id), pitch);
+  //     EREG(CB_COLOR0_SLICE + (0x3c * cb_conf->id), slice);
+  //     EREG(CB_COLOR0_VIEW + (0x3c * cb_conf->id), 0);
+  //     EREG(CB_COLOR0_DIM + (0x3c * cb_conf->id), cb_color_dim);
+  //     EREG(CB_COLOR0_CMASK_SLICE + (0x3c * cb_conf->id), 0);
+  //     EREG(CB_COLOR0_FMASK_SLICE + (0x3c * cb_conf->id), 0);
+  //     PACK0(CB_COLOR0_CLEAR_WORD0 + (0x3c * cb_conf->id), 4);
+  //     E32(0);
+  //     E32(0);
+  //     E32(0);
+  //     E32(0);
+  //     EREG(CB_TARGET_MASK,                      (cb_conf->pmask << TARGET0_ENABLE_shift));
+  //     EREG(CB_COLOR_CONTROL,                    (EVERGREEN_ROP[cb_conf->rop] |
+  // 					       (CB_NORMAL << CB_COLOR_CONTROL__MODE_shift)));
+  //     EREG(CB_BLEND0_CONTROL,                   cb_conf->blendcntl);
+  //     END_BATCH();
+      {
+	asic_cmd reg(this);
+
+	reg[CB_COLOR0_CMASK_SLICE + offset] = 0;
+	reg[CB_COLOR0_FMASK_SLICE + offset] = 0;
+	reg[CB_COLOR0_CLEAR_WORD0 + offset] = {0, 0, 0, 0};
+      }
+    }
 }
 
 void r800_state::flush_cs()
@@ -1324,7 +1339,7 @@ void r800_state::execute_shader(compute_shader* sh)
   add_persistent_bo(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
   add_persistent_bo(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
   add_persistent_bo(dummy_vbo, RADEON_GEM_DOMAIN_VRAM, 0);
-  
+
   int ret = radeon_cs_space_check(cs);
   if (ret) { 
 	  fprintf(stderr,"fail\n");
@@ -1340,22 +1355,22 @@ void r800_state::execute_shader(compute_shader* sh)
   set_dummy_render_target();
   set_spi_defaults();
   
-  setup_const_cache(0, dummy_bo, 256, 0);
+//   setup_const_cache(0, dummy_bo, 256, 0);
 
-  vtx_resource_t vtxr;
-  
-  memset(&vtxr, 0, sizeof(vtxr));
-  
-  vtxr.id = SQ_FETCH_RESOURCE_vs;
-  vtxr.vtx_size_dw = 4;
-  vtxr.vtx_num_entries = 1;
-  vtxr.vb_addr = 0;
-  vtxr.bo = dummy_vbo;
-  vtxr.dst_sel_x       = SQ_SEL_X;
-  vtxr.dst_sel_y       = SQ_SEL_Y;
-  vtxr.dst_sel_z       = SQ_SEL_Z;
-  vtxr.dst_sel_w       = SQ_SEL_W;
-  set_vtx_resource(&vtxr, RADEON_GEM_DOMAIN_VRAM);
+//   vtx_resource_t vtxr;
+//   
+//   memset(&vtxr, 0, sizeof(vtxr));
+//   
+//   vtxr.id = SQ_FETCH_RESOURCE_vs;
+//   vtxr.vtx_size_dw = 4;
+//   vtxr.vtx_num_entries = 1;
+//   vtxr.vb_addr = 0;
+//   vtxr.bo = dummy_vbo;
+//   vtxr.dst_sel_x       = SQ_SEL_X;
+//   vtxr.dst_sel_y       = SQ_SEL_Y;
+//   vtxr.dst_sel_z       = SQ_SEL_Z;
+//   vtxr.dst_sel_w       = SQ_SEL_W;
+//   set_vtx_resource(&vtxr, RADEON_GEM_DOMAIN_VRAM);
 
   set_draw_auto(3);
   
