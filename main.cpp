@@ -4,12 +4,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
-/*extern "C" {
-#include <drm.h>
-#include <xf86drm.h>
-#include <radeon_cs_gem.h>
-#include <radeon_bo_gem.h>
-};*/
 #include <assert.h>
 #include "r800_state.h"
 
@@ -22,7 +16,9 @@ int main()
     int size = 500*1024*1024;
     assert(drmAvailable());
 
-     int fd = open("/dev/dri/card0", O_RDWR, 0);
+//      int fd = open("/dev/dri/card0", O_RDWR, 0);
+     
+     int fd = drmOpen(NULL, "pci:0000:00:01.0");
      
     struct drm_radeon_gem_info mminfo;
 

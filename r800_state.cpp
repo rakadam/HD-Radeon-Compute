@@ -27,14 +27,37 @@ void r800_state::radeon_cs_flush_indirect(r800_state* state)
 
 r800_state::r800_state(int fd) : fd(fd)
 {
+  drmSetVersion sv;
+
+  sv.drm_di_major = 1;
+  sv.drm_di_minor = 1;
+  sv.drm_dd_major = -1;
+  sv.drm_dd_minor = -1;
+  
+  int ret = drmSetInterfaceVersion(fd, &sv);
+  
+  if (ret != 0)
+  {
+    fprintf(stderr, "Cannot set interface version\n");
+    close(fd);
+    exit(1);
+  }
+
+  if (drmCommandWriteRead(fd, DRM_RADEON_GEM_INFO, &mminfo, sizeof(mminfo)))
+  {
+    cerr << "Cannot get GEM info" << endl;
+    exit(1);
+  }
+   
   get_master();
   
-  gem = radeon_cs_manager_gem_ctor(fd);
-  assert(gem);
   bom = radeon_bo_manager_gem_ctor(fd);
   assert(bom);
+  gem = radeon_cs_manager_gem_ctor(fd);
+  assert(gem);
   cs = radeon_cs_create(gem, RADEON_BUFFER_SIZE/4);
-  
+
+
   if (!cs)
   {
     cerr << "Failed to open cs" << endl;
@@ -44,11 +67,6 @@ r800_state::r800_state(int fd) : fd(fd)
   ChipFamily = CHIP_FAMILY_PALM; //TODO: fix it
   
 
-  if (drmCommandWriteRead(fd, DRM_RADEON_GEM_INFO, &mminfo, sizeof(mminfo)))
-  {
-    cerr << "Cannot get GEM info" << endl;
-    exit(1);
-  }
   
   printf("mem size init: gart size :%llx vram size: s:%llx visible:%llx\n",
     (unsigned long long)mminfo.gart_size,
@@ -65,8 +83,8 @@ r800_state::r800_state(int fd) : fd(fd)
   radeon_cs_space_set_flush(cs, (void (*)(void*))radeon_cs_flush_indirect, this);
 
   dummy_bo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
-  dummy_bo_ps = bo_open(sizeof(dummy_ps_shader_binary), 1024, RADEON_GEM_DOMAIN_VRAM, 0);
-  dummy_bo_cb = bo_open(8*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  dummy_bo_ps = bo_open(sizeof(dummy_ps_shader_binary), 0, RADEON_GEM_DOMAIN_VRAM, 0);
+  dummy_bo_cb = bo_open(8*1024, 1024, 0, RADEON_GEM_DOMAIN_VRAM);
   dummy_vbo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
 }
 
@@ -1045,6 +1063,123 @@ void r800_state::set_dummy_render_target()
       reg[CB_COLOR_CONTROL] = 0x00cc0000 | (CB_NORMAL << CB_COLOR_CONTROL__MODE_shift);
       reg[CB_BLEND0_CONTROL] = 0;
     }
+}
+
+void r800_state::set_rat(int id, radeon_bo* bo)
+{
+  int offset;
+  
+  assert(id < 12);
+  
+  if (id < 8)
+  {
+    offset = id*0x3c;
+  }
+  else
+  {
+    offset = 8*0x3c + (id-8)*0x30; //FIXME: I guessed it only, should check with agd5f!
+  }
+  
+/*   BEGIN_BATCH(3 + 2);
+    EREG(CB_COLOR0_BASE + (0x3c * cb_conf->id), (cb_conf->base >> 8));
+    RELOC_BATCH(cb_conf->bo, 0, domain);
+    END_BATCH();*/
+    
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_BASE + offset] = 0;
+      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+
+    /* Set CMASK & FMASK buffer to the offset of color buffer as
+     * we don't use those this shouldn't cause any issue and we
+     * then have a valid cmd stream
+     */
+/*    BEGIN_BATCH(3 + 2);
+    EREG(CB_COLOR0_CMASK + (0x3c * cb_conf->id), (0     >> 8));
+    RELOC_BATCH(cb_conf->bo, 0, domain);
+    END_BATCH();*/
+    
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_CMASK + offset] = 0;
+      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+    
+//     BEGIN_BATCH(3 + 2);
+//     EREG(CB_COLOR0_FMASK + (0x3c * cb_conf->id), (0     >> 8));
+//     RELOC_BATCH(cb_conf->bo, 0, domain);
+//     END_BATCH();
+
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_FMASK + offset] = 0;
+      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+    
+    /* tiling config */
+/*    BEGIN_BATCH(3 + 2);
+    EREG(CB_COLOR0_ATTRIB + (0x3c * cb_conf->id), cb_color_attrib);
+    RELOC_BATCH(cb_conf->bo, 0, domain);
+    END_BATCH();*/
+    
+   {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_ATTRIB + offset] = CB_COLOR0_ATTRIB__NON_DISP_TILING_ORDER_bit;
+      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+ 
+/*    BEGIN_BATCH(3 + 2);
+    EREG(CB_COLOR0_INFO + (0x3c * cb_conf->id), cb_color_info);
+    RELOC_BATCH(cb_conf->bo, 0, domain);
+    END_BATCH();*/
+    
+    {
+      asic_cmd reg(this);
+      
+      reg[CB_COLOR0_INFO + offset] = 
+	(COLOR_8 << CB_COLOR0_INFO__FORMAT_shift) |
+	(3 << COMP_SWAP_shift) |
+	(EXPORT_4C_16BPC << SOURCE_FORMAT_shift) |
+	(BLEND_CLAMP_bit);
+	
+      reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+    }
+
+
+//     BEGIN_BATCH(33);
+//     EREG(CB_COLOR0_PITCH + (0x3c * cb_conf->id), pitch);
+//     EREG(CB_COLOR0_SLICE + (0x3c * cb_conf->id), slice);
+//     EREG(CB_COLOR0_VIEW + (0x3c * cb_conf->id), 0);
+//     EREG(CB_COLOR0_DIM + (0x3c * cb_conf->id), cb_color_dim);
+//     EREG(CB_COLOR0_CMASK_SLICE + (0x3c * cb_conf->id), 0);
+//     EREG(CB_COLOR0_FMASK_SLICE + (0x3c * cb_conf->id), 0);
+//     PACK0(CB_COLOR0_CLEAR_WORD0 + (0x3c * cb_conf->id), 4);
+//     E32(0);
+//     E32(0);
+//     E32(0);
+//     E32(0);
+//     EREG(CB_TARGET_MASK,                      (cb_conf->pmask << TARGET0_ENABLE_shift));
+//     EREG(CB_COLOR_CONTROL,                    (EVERGREEN_ROP[cb_conf->rop] |
+// 					       (CB_NORMAL << CB_COLOR_CONTROL__MODE_shift)));
+//     EREG(CB_BLEND0_CONTROL,                   cb_conf->blendcntl);
+//     END_BATCH();
+
+    {
+      asic_cmd reg(this);
+      reg[CB_COLOR0_PITCH + offset] = (16 / 8) - 1;
+      reg[CB_COLOR0_SLICE + offset] = ((16*16) / 64) - 1;
+      reg[CB_COLOR0_VIEW + offset] = 0;
+      reg[CB_COLOR0_DIM + offset] =  (15 << WIDTH_MAX_shift) | ( 15 << HEIGHT_MAX_shift);
+      reg[CB_COLOR0_CMASK_SLICE + offset] = 0;
+      reg[CB_COLOR0_FMASK_SLICE + offset] = 0;
+      reg[CB_COLOR0_CLEAR_WORD0 + offset] = {0, 0, 0, 0};
+    }
+  
 }
 
 void r800_state::flush_cs()
