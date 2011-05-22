@@ -41,11 +41,11 @@ int main()
       
       for (int i = 0; i < 256; i++)
       {
-	ptr[i] = 0;
+	ptr[i] = 1;
       }
       
       radeon_bo_unmap(buffer);
-      state.set_rat(11, buffer);
+      state.set_rat(2, buffer);
       state.execute_shader(&sh);
 //       state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 16*16*4, 0, buffer, 0, RADEON_GEM_DOMAIN_VRAM);
       state.flush_cs();

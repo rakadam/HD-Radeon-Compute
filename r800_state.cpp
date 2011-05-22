@@ -382,7 +382,7 @@ void r800_state::sq_setup()
       
       reg[PA_SC_VPORT_ZMIN_0] = 0.0f;
       reg[PA_SC_VPORT_ZMAX_0] = 1.0f;
-      reg[DB_SHADER_CONTROL] = 0;
+      reg[DB_SHADER_CONTROL] = 0; 
       reg[DB_RENDER_CONTROL] = STENCIL_COMPRESS_DISABLE_bit | DEPTH_COMPRESS_DISABLE_bit;
       reg[DB_COUNT_CONTROL] = 0;
       reg[DB_DEPTH_VIEW] = 0;
@@ -397,7 +397,7 @@ void r800_state::sq_setup()
       reg[SX_MISC] = 0;
       
       reg[SX_ALPHA_TEST_CONTROL] = {0, 0, 0, 0, 0};
-      reg[CB_SHADER_MASK] = OUTPUT0_ENABLE_mask;
+//       reg[CB_SHADER_MASK] = OUTPUT0_ENABLE_mask;
      
       reg[PA_SC_WINDOW_OFFSET] = 0;
       reg[PA_SC_CLIPRECT_RULE] = CLIP_RULE_mask;
@@ -838,12 +838,10 @@ void r800_state::set_default_state()
   set_default_sq();
   sq_setup();
   
-  {
-    asic_cmd cmd(this);
-    
-    cmd[SQ_LDS_ALLOC_PS] = 0;
-    cmd[SQ_DYN_GPR_RESOURCE_LIMIT_1] = 0;
-  }
+  asic_cmd cmd(this);
+  
+  cmd[SQ_LDS_ALLOC_PS] = 0;
+  cmd[SQ_DYN_GPR_RESOURCE_LIMIT_1] = 0;
 }
 
 void r800_state::set_spi_defaults()
@@ -966,12 +964,12 @@ void r800_state::set_dummy_render_target()
     RELOC_BATCH(cb_conf->bo, 0, domain);
     END_BATCH();*/
     
-    {
+//     {
       asic_cmd reg(this);
       
       reg[CB_COLOR0_BASE] = 0;
       reg.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
+//     }
 
     /* Set CMASK & FMASK buffer to the offset of color buffer as
      * we don't use those this shouldn't cause any issue and we
@@ -982,24 +980,24 @@ void r800_state::set_dummy_render_target()
     RELOC_BATCH(cb_conf->bo, 0, domain);
     END_BATCH();*/
     
-    {
-      asic_cmd reg(this);
+//     {
+//       asic_cmd reg(this);
       
       reg[CB_COLOR0_CMASK] = 0;
       reg.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
+//     }
     
 //     BEGIN_BATCH(3 + 2);
 //     EREG(CB_COLOR0_FMASK + (0x3c * cb_conf->id), (0     >> 8));
 //     RELOC_BATCH(cb_conf->bo, 0, domain);
 //     END_BATCH();
 
-    {
-      asic_cmd reg(this);
+//     {
+//       asic_cmd reg(this);
       
       reg[CB_COLOR0_FMASK] = 0;
       reg.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
+//     }
     
     /* tiling config */
 /*    BEGIN_BATCH(3 + 2);
@@ -1007,20 +1005,20 @@ void r800_state::set_dummy_render_target()
     RELOC_BATCH(cb_conf->bo, 0, domain);
     END_BATCH();*/
     
-   {
-      asic_cmd reg(this);
+//    {
+//       asic_cmd reg(this);
       
       reg[CB_COLOR0_ATTRIB] = CB_COLOR0_ATTRIB__NON_DISP_TILING_ORDER_bit;
       reg.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
+//     }
  
 /*    BEGIN_BATCH(3 + 2);
     EREG(CB_COLOR0_INFO + (0x3c * cb_conf->id), cb_color_info);
     RELOC_BATCH(cb_conf->bo, 0, domain);
     END_BATCH();*/
     
-    {
-      asic_cmd reg(this);
+//     {
+//       asic_cmd reg(this);
       
       reg[CB_COLOR0_INFO] = 
 	(COLOR_8 << CB_COLOR0_INFO__FORMAT_shift) |
@@ -1029,7 +1027,7 @@ void r800_state::set_dummy_render_target()
 	(BLEND_CLAMP_bit);
 	
       reg.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
+//     }
 
 
 //     BEGIN_BATCH(33);
@@ -1050,8 +1048,8 @@ void r800_state::set_dummy_render_target()
 //     EREG(CB_BLEND0_CONTROL,                   cb_conf->blendcntl);
 //     END_BATCH();
 
-    {
-      asic_cmd reg(this);
+//     {
+//       asic_cmd reg(this);
       reg[CB_COLOR0_PITCH] = (16 / 8) - 1;
       reg[CB_COLOR0_SLICE] = ((16*16) / 64) - 1;
       reg[CB_COLOR0_VIEW] = 0;
@@ -1060,9 +1058,10 @@ void r800_state::set_dummy_render_target()
       reg[CB_COLOR0_FMASK_SLICE] = 0;
       reg[CB_COLOR0_CLEAR_WORD0] = {0, 0, 0, 0};
       reg[CB_TARGET_MASK] = 15 << TARGET0_ENABLE_shift;
+      reg[CB_SHADER_MASK] = 0; //OUTPUT0_ENABLE_mask | OUTPUT2_ENABLE_mask;
       reg[CB_COLOR_CONTROL] = 0x00cc0000 | (CB_NORMAL << CB_COLOR_CONTROL__MODE_shift);
       reg[CB_BLEND0_CONTROL] = 0;
-    }
+//     }
 }
 
 void r800_state::set_rat(int id, radeon_bo* bo)
@@ -1095,36 +1094,36 @@ void r800_state::set_rat(int id, radeon_bo* bo)
     
     printf("%.8x\n", CB_COLOR0_BASE + offset);
     
-    {
+//     {
       asic_cmd reg(this);
       
       reg[CB_COLOR0_BASE + offset] = 0;
       reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
-    {
-      asic_cmd reg(this);
+//     }
+//     {
+//       asic_cmd reg(this);
       reg[CB_COLOR0_PITCH + offset] = (16 / 8) - 1;
       reg[CB_COLOR0_SLICE + offset] = ((16*16) / 64) - 1;
       reg[CB_COLOR0_VIEW + offset] = 0;
-    }
-    {
-      asic_cmd reg(this);
+//     }
+//     {
+//       asic_cmd reg(this);
       
       reg[CB_COLOR0_INFO + offset] = RAT_bit;
       
       reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
-    {
-      asic_cmd reg(this);
+//     }
+//     {
+//       asic_cmd reg(this);
       
       reg[CB_COLOR0_ATTRIB + offset] = CB_COLOR0_ATTRIB__NON_DISP_TILING_ORDER_bit;
       reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
-    }
-    {
-      asic_cmd reg(this);
+//     }
+//     {
+//       asic_cmd reg(this);
       
       reg[CB_COLOR0_DIM + offset] =  (15 << WIDTH_MAX_shift) | ( 15 << HEIGHT_MAX_shift);
-    }
+//     }
     
     if (id < 8)
     {
@@ -1137,24 +1136,24 @@ void r800_state::set_rat(int id, radeon_bo* bo)
       RELOC_BATCH(cb_conf->bo, 0, domain);
       END_BATCH();*/
       
-      {
-	asic_cmd reg(this);
+//       {
+// 	asic_cmd reg(this);
 	
 	reg[CB_COLOR0_CMASK + offset] = 0;
 	reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
-      }
+//       }
       
   //     BEGIN_BATCH(3 + 2);
   //     EREG(CB_COLOR0_FMASK + (0x3c * cb_conf->id), (0     >> 8));
   //     RELOC_BATCH(cb_conf->bo, 0, domain);
   //     END_BATCH();
 
-      {
-	asic_cmd reg(this);
+//       {
+// 	asic_cmd reg(this);
 	
 	reg[CB_COLOR0_FMASK + offset] = 0;
 	reg.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
-      }
+//       }
       
       /* tiling config */
   /*    BEGIN_BATCH(3 + 2);
@@ -1187,13 +1186,13 @@ void r800_state::set_rat(int id, radeon_bo* bo)
   // 					       (CB_NORMAL << CB_COLOR_CONTROL__MODE_shift)));
   //     EREG(CB_BLEND0_CONTROL,                   cb_conf->blendcntl);
   //     END_BATCH();
-      {
-	asic_cmd reg(this);
+//       {
+// 	asic_cmd reg(this);
 
 	reg[CB_COLOR0_CMASK_SLICE + offset] = 0;
 	reg[CB_COLOR0_FMASK_SLICE + offset] = 0;
 	reg[CB_COLOR0_CLEAR_WORD0 + offset] = {0, 0, 0, 0};
-      }
+//       }
     }
 }
 
@@ -1213,7 +1212,7 @@ void r800_state::upload_dummy_ps()
 
 void r800_state::set_dummy_scissors()
 {
-  {
+//   {
     asic_cmd reg(this);
     
     reg[PA_SC_GENERIC_SCISSOR_TL] = {
@@ -1223,9 +1222,9 @@ void r800_state::set_dummy_scissors()
       ((16 << PA_SC_GENERIC_SCISSOR_BR__BR_X_shift) |
 	(16 << PA_SC_GENERIC_SCISSOR_TL__TL_Y_shift))
     };
-  }
+/*  }
   {
-    asic_cmd reg(this);
+    asic_cmd reg(this);*/
     
     reg[PA_SC_SCREEN_SCISSOR_TL] = {
       ((0 << PA_SC_SCREEN_SCISSOR_TL__TL_X_shift) |
@@ -1233,9 +1232,9 @@ void r800_state::set_dummy_scissors()
       ((16 << PA_SC_SCREEN_SCISSOR_BR__BR_X_shift) |
 	(16 << PA_SC_SCREEN_SCISSOR_BR__BR_Y_shift))
     };
-  }
+/*  }
   {
-    asic_cmd reg(this);
+    asic_cmd reg(this);*/
     
     reg[PA_SC_WINDOW_SCISSOR_TL] = {
       ((0 << PA_SC_WINDOW_SCISSOR_TL__TL_X_shift) |
@@ -1244,7 +1243,7 @@ void r800_state::set_dummy_scissors()
       ((16 << PA_SC_WINDOW_SCISSOR_BR__BR_X_shift) |
 	(16 << PA_SC_WINDOW_SCISSOR_BR__BR_Y_shift))
     };
-  }
+//   }
 }
 
 void r800_state::setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset)
@@ -1254,31 +1253,31 @@ void r800_state::setup_const_cache(int cache_id, struct radeon_bo* cbo, int size
   set_surface_sync(SH_ACTION_ENA_bit,
 		  size, offset,
 		  cbo, RADEON_GEM_DOMAIN_VRAM, 0);
-  {
+//   {
     asic_cmd reg(this);
     
     reg[SQ_ALU_CONST_BUFFER_SIZE_VS_0+cache_id] = size;
-  }
+/*  }
   {
-    asic_cmd reg(this);
+    asic_cmd reg(this);*/
     assert((offset & 0xFF) == 0);
     reg[SQ_ALU_CONST_CACHE_VS_0+cache_id] = offset >> 8;
     reg.reloc(cbo, radeon_bo_get_src_domain(cbo), 0);
-  }
+//   }
   
   assert(cache_id < SQ_ALU_CONST_BUFFER_SIZE_PS_0_num);
   
-  {
-    asic_cmd reg(this);
+/*  {
+    asic_cmd reg(this);*/
     
     reg[SQ_ALU_CONST_BUFFER_SIZE_PS_0+cache_id] = size;
-  }
+/*  }
   {
-    asic_cmd reg(this);
+    asic_cmd reg(this);*/
     assert((offset & 0xFF) == 0);
     reg[SQ_ALU_CONST_CACHE_PS_0+cache_id] = offset >> 8;
     reg.reloc(cbo, radeon_bo_get_src_domain(cbo), 0);
-  }
+//   }
 }
 
 void r800_state::prepare_compute_shader(compute_shader* sh)
@@ -1293,32 +1292,32 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
 		  sizeof(dummy_ps_shader_binary), 0,
 		  dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
 
-  {
+//   {
     asic_cmd reg(this);
     reg[SQ_PGM_START_PS] = 0;
     reg.reloc(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
-  }
+/*  }
   {
-    asic_cmd reg(this);
+    asic_cmd reg(this);*/
     reg[SQ_PGM_RESOURCES_PS] = {
       (/*num_gprs*/1 | (0 << STACK_SIZE_shift)),
       SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
     };
-  }
+/*  }
   {
-    asic_cmd reg(this);
+    asic_cmd reg(this);*/
     reg[SQ_PGM_START_VS] = 0;
     reg.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-  }
+/*  }
   {
-    asic_cmd reg(this);
+    asic_cmd reg(this);*/
     reg[SQ_PGM_RESOURCES_VS] = {
       (sh->num_gprs | (sh->stack_size << STACK_SIZE_shift)) | PRIME_CACHE_ENABLE,
       SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
     };
-  }
+/*  }
   {
-    asic_cmd reg(this);
+    asic_cmd reg(this);*/
     
     reg[SQ_LDS_ALLOC_PS] = sh->lds_alloc; //in 32 bit words
     reg[SQ_GLOBAL_GPR_RESOURCE_MGMT_1] = (0 << PS_GGPR_BASE_shift) | (sh->global_gprs << VS_GGPR_BASE_shift);
@@ -1326,7 +1325,7 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
     reg[SQ_THREAD_RESOURCE_MGMT] = (sq_conf.num_ps_threads << NUM_PS_THREADS_shift) | (sh->thread_num << NUM_VS_THREADS_shift);
     reg[SQ_STACK_RESOURCE_MGMT_1] = (1 << NUM_PS_STACK_ENTRIES_shift) | (sh->stack_size << NUM_VS_STACK_ENTRIES_shift);
     reg[SQ_PGM_EXPORTS_PS] = 2; 
-  }
+//   }
 }
 
 void r800_state::execute_shader(compute_shader* sh)
@@ -1376,6 +1375,11 @@ void r800_state::execute_shader(compute_shader* sh)
   
   set_surface_sync((CB_ACTION_ENA_bit | CB0_DEST_BASE_ENA_bit), 16*16, 0, dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
   
+  packet3(IT_EVENT_WRITE, 1);
+  write_dword(CACHE_FLUSH_AND_INV_TS_EVENT);
+  packet3(IT_EVENT_WRITE, 1);
+  write_dword(DB_CACHE_FLUSH_AND_INV);
+
   cout << cs->cdw << endl;
 }
 
