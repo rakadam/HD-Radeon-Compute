@@ -661,8 +661,8 @@ void r800_state::set_dummy_render_target()
   cs[CB_COLOR0_CMASK_SLICE] = 0;
   cs[CB_COLOR0_FMASK_SLICE] = 0;
   cs[CB_COLOR0_CLEAR_WORD0] = {0, 0, 0, 0};
-  cs[CB_TARGET_MASK] = 15 << TARGET0_ENABLE_shift;
-  cs[CB_SHADER_MASK] = 0; //OUTPUT0_ENABLE_mask | OUTPUT2_ENABLE_mask;
+  cs[CB_TARGET_MASK] = 15 << TARGET0_ENABLE_shift | TARGET2_ENABLE_mask;
+  cs[CB_SHADER_MASK] = OUTPUT0_ENABLE_mask | OUTPUT2_ENABLE_mask;
   cs[CB_COLOR_CONTROL] = 0x00cc0000 | (CB_NORMAL << CB_COLOR_CONTROL__MODE_shift);
   cs[CB_BLEND0_CONTROL] = 0;
 }
@@ -690,6 +690,9 @@ void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
   cs[CB_COLOR0_BASE + offset] = start >> 8;
   cs.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
 
+  cs[CB_IMMED0_BASE + id*8] = start >> 8;
+  cs.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+  
   cs[CB_COLOR0_PITCH + offset] = 0; //(16 / 8) - 1;
   cs[CB_COLOR0_SLICE + offset] = 0; //((16*16) / 64) - 1;
   cs[CB_COLOR0_VIEW + offset] = 0;
