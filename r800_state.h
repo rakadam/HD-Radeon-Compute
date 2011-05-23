@@ -10,10 +10,9 @@ extern "C" {
 };
 
 #include "cs_image.h"
+#include "radeon_cs.hpp"
 
 #include <cstdint>
-
-#define RADEON_BUFFER_SIZE		65536
 
 typedef enum {
     CHIP_FAMILY_UNKNOW,
@@ -253,22 +252,16 @@ typedef struct {
     bool32                      disable_cube_wrap;
 } tex_sampler_t;
 
-class r800_state;
-
-class asic_cmd;
-
 class r800_state
 {
-  friend class asic_cmd;
   int fd;
-  struct radeon_cs_manager * gem;
   struct radeon_bo_manager * bom;
-  struct radeon_cs *cs;
+  radeon_cmd_stream cs;
+  
   sq_config_t sq_conf;
   struct drm_radeon_gem_info mminfo;
   
   RADEONChipFamily ChipFamily;
-  static void radeon_cs_flush_indirect(r800_state* state);
   
   struct radeon_bo *dummy_bo, *dummy_bo_ps, *dummy_bo_cb, *dummy_vbo;
   
@@ -280,21 +273,9 @@ class r800_state
                                  uint32_t alignment,
                                  uint32_t domains,
                                  uint32_t flags);
-    
-    void cs_begin(int ndw);
-    void cs_end();
-    void reloc(struct radeon_bo *, uint32_t rd, uint32_t wd);
-    void write_dword(uint32_t dword);
-    void write_float(float f);
-    void packet3(uint32_t cmd, uint32_t num);
-    void send_packet3(uint32_t cmd, std::vector<uint32_t> vals);
-    void packet0(uint32_t reg, uint32_t num);
-    void set_reg(uint32_t reg, uint32_t val);
-    void set_reg(uint32_t reg, float val);
-    void set_regs(uint32_t reg, std::vector<uint32_t> vals);
-    void add_persistent_bo(struct radeon_bo *bo, uint32_t read_domains, uint32_t write_domain);
-    
+        
     struct radeon_bo *bo_open(uint32_t handle, uint32_t size, uint32_t alignment, uint32_t domains, uint32_t flags);
+    
     int bo_is_referenced_by_cs(struct radeon_bo *bo);
 
     void get_master();
@@ -306,7 +287,7 @@ class r800_state
     void set_spi_defaults();
     void set_draw_auto(int num_indices);
     void set_dummy_render_target();
-    void set_rat(int id, radeon_bo* bo);
+    void set_rat(int id, radeon_bo* bo, int start, int size);
     void flush_cs();
     void upload_dummy_ps();
     void set_dummy_scissors();
@@ -321,71 +302,6 @@ class r800_state
     void execute_shader(compute_shader* sh);
 };
 
-class asic_cmd
-{
-  struct token
-  {
-    token(uint32_t dw) : bo_reloc(false) ,dw(dw) {}
-    token(struct radeon_bo *bo, uint32_t rd, uint32_t wd) : bo_reloc(true), dw(0), bo(bo), rd(rd), wd(wd) {}
-    bool bo_reloc;
-    uint32_t dw;
-    struct radeon_bo *bo;
-    uint32_t rd;
-    uint32_t wd;
-  };
-  
-  std::vector<token> queue;
-  r800_state* state;
-  int reloc_num;
-  
-public:
-  struct asic_cmd_regsetter
-  {
-    uint32_t reg;
-    asic_cmd_regsetter(asic_cmd *cmd, uint32_t reg, bool dummy) : cmd(cmd), reg(reg) {}
-    
-    asic_cmd *cmd;
-    
-    void operator=(uint32_t val)
-    {
-      cmd->set_reg(reg, val);
-    }
-    
-    void operator=(float val)
-    {
-      cmd->set_reg(reg, val);
-    }
-        
-    void operator=(int val)
-    {
-      cmd->set_reg(reg, val);
-    }
-    
-    void operator=(const std::vector<uint32_t>& vec)
-    {
-      cmd->set_regs(reg, vec);
-    }
-  };
-  
-  asic_cmd(r800_state*);
-  asic_cmd(const asic_cmd&) = delete;
-  asic_cmd(asic_cmd&&);
-  
-  void reloc(struct radeon_bo *, uint32_t rd, uint32_t wd);
-  void write_dword(uint32_t dword);
-  void write_float(float f);
-  void packet3(uint32_t cmd, uint32_t num);
-  void send_packet3(uint32_t cmd, std::vector<uint32_t> vals);
-  void packet0(uint32_t reg, uint32_t num);
-  void set_reg(uint32_t reg, uint32_t val);
-  void set_reg(uint32_t reg, int val);
-  void set_reg(uint32_t reg, float val);
-  void set_regs(uint32_t reg, std::vector<uint32_t> vals);  
-  
-  asic_cmd_regsetter operator[](uint32_t index);
-  
-  ~asic_cmd();
-};
 
 
 

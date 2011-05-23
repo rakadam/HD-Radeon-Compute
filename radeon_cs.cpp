@@ -8,6 +8,8 @@ extern "C" {
 #include <radeon_bo_gem.h>
 };
 
+#include <iostream>
+#include <stdexcept>
 #include "radeon_cs.hpp"
 #include "evergreen_reg.h"
 
@@ -25,6 +27,8 @@ extern "C" {
         (RADEON_CP_PACKET2)
 #define CP_PACKET3(pkt, n)                                              \
         (RADEON_CP_PACKET3 | (pkt) | ((n) << 16))
+
+using namespace std;
 
 radeon_cmd_stream::regsetter::regsetter(radeon_cmd_stream *stream, uint32_t reg) : stream(stream), reg(reg)
 {
@@ -50,6 +54,16 @@ void radeon_cmd_stream::regsetter::operator=(const std::vector<uint32_t>& vec)
   stream->set_regs(reg, vec);
 }
 
+void radeon_cmd_stream::regsetter::operator=(const std::initializer_list<uint32_t>& vec)
+{
+  stream->set_regs(reg, vec);  
+}
+
+void radeon_cmd_stream::radeon_cs_flush_indirect(radeon_cmd_stream* stream)
+{
+  radeon_cs_emit((radeon_cs*)stream->cs);
+  radeon_cs_erase((radeon_cs*)stream->cs);
+}
 
 radeon_cmd_stream::radeon_cmd_stream(int fd)
 {
@@ -57,9 +71,12 @@ radeon_cmd_stream::radeon_cmd_stream(int fd)
   assert(gem);
   cs = radeon_cs_create((radeon_cs_manager*)gem, RADEON_BUFFER_SIZE/4);
   assert(cs);
+  reloc_num = 0;
+  radeon_cs_space_set_flush((radeon_cs*)cs, (void (*)(void*))radeon_cs_flush_indirect, this);
 }
 
-radeon_cmd_stream::radeon_cmd_stream(radeon_cmd_stream&& b) : cs(b.cs), gem(b.gem)
+radeon_cmd_stream::radeon_cmd_stream(radeon_cmd_stream&& b)
+  : cs(b.cs), gem(b.gem), queue(b.queue), reloc_num(b.reloc_num), pers_bos(b.pers_bos)
 {
   b.cs = NULL;
   b.gem = NULL;
@@ -70,14 +87,15 @@ radeon_cmd_stream::regsetter radeon_cmd_stream::operator[](uint32_t index)
   return regsetter(this, index);
 }
 
-void radeon_cmd_stream::reloc(struct radeon_bo * bo, uint32_t rd, uint32_t wd)
+void radeon_cmd_stream::reloc(struct radeon_bo * bo, uint32_t rd, uint32_t wr)
 {
-  radeon_cs_write_reloc((radeon_cs*)cs, bo, rd, wd, 0);
+  queue.push_back(token(bo, rd, wr));
+  reloc_num++;
 }
 
 void radeon_cmd_stream::write_dword(uint32_t dword)
 {
-  radeon_cs_write_dword((radeon_cs*)cs, dword);
+  queue.push_back(token(dword));
 }
 
 void radeon_cmd_stream::write_float(float f)
@@ -108,36 +126,42 @@ void radeon_cmd_stream::packet3(uint32_t cmd, std::vector<uint32_t> vals)
   }
 }
 
+void radeon_cmd_stream::packet3(uint32_t cmd, std::initializer_list<uint32_t> vals)
+{
+  packet3(cmd, vector<uint32_t>(vals));
+}
+
+
 void radeon_cmd_stream::packet0(uint32_t reg, uint32_t num)
 {
   if ((reg) >= SET_CONFIG_REG_offset && (reg) < SET_CONFIG_REG_end)
   {
-    packet3(IT_SET_CONFIG_REG, (num) + 1);			
+    packet3(IT_SET_CONFIG_REG, (num) + 1);
     write_dword(((reg) - SET_CONFIG_REG_offset) >> 2);                  
   }
   else if ((reg) >= SET_CONTEXT_REG_offset && (reg) < SET_CONTEXT_REG_end)
   { 
-    packet3(IT_SET_CONTEXT_REG, (num) + 1);			
-    write_dword(((reg) - SET_CONTEXT_REG_offset) >> 2);			
+    packet3(IT_SET_CONTEXT_REG, (num) + 1);
+    write_dword(((reg) - SET_CONTEXT_REG_offset) >> 2);
   }
   else if ((reg) >= SET_RESOURCE_offset && (reg) < SET_RESOURCE_end)
   { 
-    packet3(IT_SET_RESOURCE, num + 1);				
-    write_dword(((reg) - SET_RESOURCE_offset) >> 2);			
+    packet3(IT_SET_RESOURCE, num + 1);
+    write_dword(((reg) - SET_RESOURCE_offset) >> 2);
   }
   else if ((reg) >= SET_SAMPLER_offset && (reg) < SET_SAMPLER_end)
   { 
-    packet3(IT_SET_SAMPLER, (num) + 1);				
-    write_dword((reg - SET_SAMPLER_offset) >> 2);			
+    packet3(IT_SET_SAMPLER, (num) + 1);
+    write_dword((reg - SET_SAMPLER_offset) >> 2);
   }
   else if ((reg) >= SET_CTL_CONST_offset && (reg) < SET_CTL_CONST_end)
   { 
-    packet3(IT_SET_CTL_CONST, (num) + 1);			
-    write_dword(((reg) - SET_CTL_CONST_offset) >> 2);		
+    packet3(IT_SET_CTL_CONST, (num) + 1);
+    write_dword(((reg) - SET_CTL_CONST_offset) >> 2);
   }
   else if ((reg) >= SET_LOOP_CONST_offset && (reg) < SET_LOOP_CONST_end)
   { 
-    packet3(IT_SET_LOOP_CONST, (num) + 1);			
+    packet3(IT_SET_LOOP_CONST, (num) + 1);
     write_dword(((reg) - SET_LOOP_CONST_offset) >> 2);
   }
   else if ((reg) >= SET_BOOL_CONST_offset && (reg) < SET_BOOL_CONST_end)
@@ -145,7 +169,7 @@ void radeon_cmd_stream::packet0(uint32_t reg, uint32_t num)
     packet3(IT_SET_BOOL_CONST, (num) + 1);
     write_dword(((reg) - SET_BOOL_CONST_offset) >> 2);
   }
-  else
+  else //if its actually a packet0
   {
     write_dword(CP_PACKET0 ((reg), (num) - 1));
   }
@@ -177,6 +201,68 @@ void radeon_cmd_stream::set_regs(uint32_t reg, std::vector<uint32_t> vals)
   {
     write_dword(vals[i]);
   }
+}
+
+void radeon_cmd_stream::space_check()
+{
+  for (int i = 0; i < int(pers_bos.size()); i++)
+  {
+//     cout << pers_bos[i].bo->size << endl;
+    radeon_cs_space_add_persistent_bo((radeon_cs*)cs, pers_bos[i].bo, pers_bos[i].rd, pers_bos[i].wd);
+  }
+  
+  int ret = radeon_cs_space_check((radeon_cs*)cs);
+  
+  if (ret)
+  {
+    cerr << ret << " " << pers_bos.size() << endl;
+    throw runtime_error("BO space check failure!");
+  }
+}
+
+void radeon_cmd_stream::cs_emit()
+{
+  int ndw = queue.size() + reloc_num;
+  
+  radeon_cs_begin((radeon_cs*)cs, ndw, __FILE__, __func__, __LINE__);
+  
+  for (int i = 0; i < int(queue.size()); i++)
+  {
+    if (queue[i].bo_reloc)
+    {
+      if (radeon_cs_write_reloc((radeon_cs*)cs, queue[i].bo, queue[i].rd, queue[i].wd, 0))
+      {
+	throw runtime_error("Relocation error");
+      }
+    }
+    else
+    {
+      radeon_cs_write_dword((radeon_cs*)cs, queue[i].dw); 
+    }
+  }
+  
+  radeon_cs_end((radeon_cs*)cs, __FILE__, __func__, __LINE__);
+  
+  radeon_cs_emit((radeon_cs*)cs);
+  radeon_cs_erase((radeon_cs*)cs);
+}
+
+void radeon_cmd_stream::cs_erase()
+{
+  queue.clear();
+  reloc_num = 0;
+}
+
+void radeon_cmd_stream::add_persistent_bo(struct radeon_bo *bo,
+  uint32_t read_domain,
+  uint32_t write_domain)
+{
+  pers_bos.push_back(token(bo, read_domain, write_domain));
+}
+
+void radeon_cmd_stream::set_limit(uint32_t domain, uint32_t limit)
+{
+  radeon_cs_set_limit((radeon_cs*)cs, domain, limit);
 }
 
 radeon_cmd_stream::~radeon_cmd_stream()
