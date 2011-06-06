@@ -43,6 +43,62 @@
 #include "evergreen_reg.h"
 #include "dummy_ps_ec.h"
 
+#define SPI_COMPUTE_INPUT_CNTL 0x000286E8
+#define SQ_LDS_RESOURCE_MGMT 0x8e2c
+#define NUM_LS_LDS_shift 16
+
+#define SQ_LDS_ALLOC 0x288e8
+#define SQ_LDS_ALLOC_SIZE_SHIFT 0
+#define SQ_LDS_ALLOC_HS_NUM_WAVES_SHIFT 14
+
+#define GDS_ORDERED_WAVE_PER_SE 0x28728
+// #define GDS_ORDERED_WAVE_PER_SE_COUNT_SHIFT 0
+
+#define GDS_ADDR_BASE 0x28720
+#define GDS_ADDR_SIZE 0x28724
+
+//for VGT_GS_MODE
+#define COMPUTE_MODE_bit (1 << 14)
+#define PARTIAL_THD_AT_EOI_bit (1 << 17)
+
+#define SX_MEMORY_EXPORT_BASE 0x9010
+#define SX_MEMORY_EXPORT_SIZE 0x9014
+
+
+#define GRBM_GFX_INDEX                                  0x802C
+#define         INSTANCE_INDEX(x)                       ((x) << 0)
+#define         SE_INDEX(x)                             ((x) << 16)
+#define         INSTANCE_BROADCAST_WRITES               (1 << 30)
+#define         SE_BROADCAST_WRITES                     (1 << 31)
+
+
+#define VGT_COMPUTE_START_X 0x899c
+// 31:0 START
+
+#define VGT_COMPUTE_START_Y 0x89a0
+// 31:0 START
+
+#define VGT_COMPUTE_START_Z 0x89a4
+// 31:0 START
+
+#define SPI_COMPUTE_NUM_THREAD_X 0x286ec
+// 15:0 VALUE
+
+#define SPI_COMPUTE_NUM_THREAD_Y 0x286f0
+// 15:0 VALUE
+
+#define SPI_COMPUTE_NUM_THREAD_Z 0x286f4
+// 15:0 VALUE
+
+#define VGT_COMPUTE_THREAD_GROUP_SIZE 0x89ac
+// 11:0 SIZE
+
+#define VGT_DISPATCH_INITIATOR 0x28b74
+// 0 COMPUTE_SHADER_EN
+// 
+#define PACKET3_DISPATCH_DIRECT                         0x15
+#define PACKET3_DISPATCH_INDIRECT                       0x16
+
 using namespace std;
 
 r800_state::r800_state(int fd) : fd(fd), cs(fd)
@@ -206,7 +262,7 @@ void r800_state::sq_setup()
 			      (sq_conf.num_ls_stack_entries << NUM_LS_STACK_ENTRIES_shift));
 
     
-  cs[SQ_DYN_GPR_CNTL_PS_FLUSH_REQ] = 0; // disable dyn gprs
+  cs[SQ_DYN_GPR_CNTL_PS_FLUSH_REQ] = 0;
     
   cs[SQ_CONFIG] = {
     sq_config,
@@ -223,9 +279,6 @@ void r800_state::sq_setup()
     sq_stack_resource_mgmt_3      
   };
     
-  cs[SPI_CONFIG_CNTL] = 0;
-  cs[SPI_CONFIG_CNTL_1] = X_DELAY_22_CLKS;
-  cs[PA_SC_MODE_CNTL] = {0, 0};
   cs[SQ_ESGS_RING_ITEMSIZE] = 0;
   cs[SQ_GSVS_RING_ITEMSIZE] = 0;
   cs[SQ_ESTMP_RING_ITEMSIZE] = 0;
@@ -235,139 +288,22 @@ void r800_state::sq_setup()
   cs[SQ_GS_VERT_ITEMSIZE] = {0, 0, 0, 0};
   cs[SQ_VTX_BASE_VTX_LOC] = {0, 0};
 
-  cs[DB_Z_INFO] = 0;
-  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-  
-  cs[DB_STENCIL_INFO] = 0;
-  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-  
-  cs[DB_HTILE_DATA_BASE] = 0;
-  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-  
-  cs[DB_DEPTH_CONTROL] = 0;
-  
-  cs[VGT_OUTPUT_PATH_CNTL] = 0;
-  cs[VGT_HOS_CNTL] = 0;
-  cs[VGT_HOS_MAX_TESS_LEVEL] = 0;
-  cs[VGT_HOS_MIN_TESS_LEVEL] = 0;
-  cs[VGT_HOS_REUSE_DEPTH] = 0;
-  cs[VGT_GROUP_PRIM_TYPE] = 0;
-  cs[VGT_GROUP_FIRST_DECR] = 0;
-  cs[VGT_GROUP_DECR] = 0;
-  cs[VGT_GROUP_VECT_0_CNTL] = 0;
-  cs[VGT_GROUP_VECT_1_CNTL] = 0;
-  cs[VGT_GROUP_VECT_0_FMT_CNTL] = 0;
-  cs[VGT_GROUP_VECT_1_FMT_CNTL] = 0;
-  cs[VGT_GS_MODE] = 0;
-  cs[VGT_STRMOUT_CONFIG] = 0;
-  cs[VGT_STRMOUT_BUFFER_CONFIG] = 0;
-  cs[VGT_REUSE_OFF] = 0;
-  cs[VGT_VTX_CNT_EN] = 0;
-  
-  cs[PA_CL_ENHANCE] = 3 << 1 | 1;
   cs[SQ_VTX_SEMANTIC] = vector<uint32_t>(SQ_VTX_SEMANTIC_num);
-  cs[PA_CL_CLIP_CNTL] = 0;
   
-  cs[PA_SC_VPORT_ZMIN_0] = 0.0f;
-  cs[PA_SC_VPORT_ZMAX_0] = 1.0f;
-  cs[DB_SHADER_CONTROL] = 0; 
-  cs[DB_RENDER_CONTROL] = STENCIL_COMPRESS_DISABLE_bit | DEPTH_COMPRESS_DISABLE_bit;
-  cs[DB_COUNT_CONTROL] = 0;
-  cs[DB_DEPTH_VIEW] = 0;
-  cs[DB_RENDER_OVERRIDE] = {0, 0};
-  cs[DB_PRELOAD_CONTROL] = 0;
-  cs[DB_SRESULTS_COMPARE_STATE] = {0, 0};
-  
-  cs[DB_STENCIL_CLEAR] = 0;
-  cs[DB_DEPTH_CLEAR] = 0;
-  cs[DB_ALPHA_TO_MASK] = 0;
-
-  cs[SX_MISC] = 0;
-  
-  cs[SX_ALPHA_TEST_CONTROL] = {0, 0, 0, 0, 0};
-  
-  cs[PA_SC_WINDOW_OFFSET] = 0;
-  cs[PA_SC_CLIPRECT_RULE] = CLIP_RULE_mask;
-  cs[PA_SC_EDGERULE] = 0xAAAAAAAA;
-  cs[PA_SU_HARDWARE_SCREEN_OFFSET] = 0;
   
   cs[SQ_PGM_RESOURCES_PS] = {0, 0};
   
-  for (int i = 0; i < PA_SC_CLIPRECT_0_TL_num; i++)
-  {
-    cs[PA_SC_CLIPRECT_0_TL + i * PA_SC_CLIPRECT_0_TL_offset] = {
-    ((0 << PA_SC_CLIPRECT_0_TL__TL_X_shift) |
-	(0 << PA_SC_CLIPRECT_0_TL__TL_Y_shift)), 
-    ((8192 << PA_SC_CLIPRECT_0_BR__BR_X_shift) |
-	(8192 << PA_SC_CLIPRECT_0_BR__BR_Y_shift))
-    };
-  }
-  
-  for (int i = 0; i < PA_SC_VPORT_SCISSOR_0_TL_num; i++)
-  {
-    cs[PA_SC_VPORT_SCISSOR_0_TL + i * PA_SC_VPORT_SCISSOR_0_TL_offset] = {
-    ((0 << PA_SC_VPORT_SCISSOR_0_TL__TL_X_shift) |
-	(0 << PA_SC_VPORT_SCISSOR_0_TL__TL_Y_shift) |
-	WINDOW_OFFSET_DISABLE_bit),
-    ((8192 << PA_SC_VPORT_SCISSOR_0_BR__BR_X_shift) |
-	(8192 << PA_SC_VPORT_SCISSOR_0_BR__BR_Y_shift))
-    };
-  }
-  
-  cs[PA_SC_MODE_CNTL] = {0, 0};
-  cs[PA_SC_LINE_CNTL] = vector<uint32_t>{0, 0, (X_ROUND_TO_EVEN << PA_SU_VTX_CNTL__ROUND_MODE_shift) |
-      PIX_CENTER_bit};
-  cs[PA_CL_GB_VERT_CLIP_ADJ] = 1.0f;
-  cs[PA_CL_GB_VERT_DISC_ADJ] = 1.0f;
-  cs[PA_CL_GB_HORZ_CLIP_ADJ] = 1.0f;
-  cs[PA_CL_GB_HORZ_DISC_ADJ] = 1.0f;
-  
-  cs[PA_SC_AA_SAMPLE_LOCS_0] = {0, 0, 0, 0, 0, 0, 0, 0};
-  cs[PA_SC_AA_MASK] = 0xFFFFFFFF;
-  cs[PA_CL_CLIP_CNTL] = CLIP_DISABLE_bit;
-  cs[PA_SU_SC_MODE_CNTL] = FACE_bit;
-  cs[PA_CL_VTE_CNTL] = VTX_XY_FMT_bit;
-  cs[PA_CL_VS_OUT_CNTL] = 0;
-  cs[PA_CL_NANINF_CNTL] = 0;
-  cs[PA_SU_LINE_STIPPLE_CNTL] = 0;
-  cs[PA_SU_LINE_STIPPLE_SCALE] = 0;
-  cs[PA_SU_PRIM_FILTER_CNTL] = 0;
-
-  cs[PA_SU_POLY_OFFSET_DB_FMT_CNTL] = {0, 0, 0, 0, 0, 0};
   cs[CB_BLEND0_CONTROL] = {0, 0, 0, 0, 0, 0, 0, 0};
   
   cs[SQ_PGM_START_FS] = 0;
   cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+  
   cs[SQ_PGM_RESOURCES_FS] = 0; //we won't use fetch shaders
   
-  cs[VGT_MAX_VTX_INDX] = 0xFFFFFFFF;
-  cs[VGT_MIN_VTX_INDX] = 0;
-  cs[VGT_INDX_OFFSET] = 0;
-  cs[VGT_MULTI_PRIM_IB_RESET_INDX] = 0;
+  cs[SQ_LDS_ALLOC_PS] = 0;
+  cs[SQ_DYN_GPR_RESOURCE_LIMIT_1] = 0;
+
   
-  cs[VGT_INSTANCE_STEP_RATE_0] = {0, 0};
-  cs[VGT_REUSE_OFF] = 0;
-  cs[VGT_VTX_CNT_EN] = 0;
-  
-  cs[PA_SU_POINT_SIZE] = 0;
-  cs[PA_SU_POINT_MINMAX] = 0;
-  cs[PA_SU_LINE_CNTL] = (8 << PA_SU_LINE_CNTL__WIDTH_shift);
-  cs[PA_SC_LINE_STIPPLE] = 0;
-  cs[VGT_OUTPUT_PATH_CNTL] = 0;
-  cs[VGT_HOS_CNTL] = 0;
-  cs[VGT_HOS_MAX_TESS_LEVEL] = 0;
-  cs[VGT_HOS_MIN_TESS_LEVEL] = 0;
-  cs[VGT_HOS_REUSE_DEPTH] = 0;
-  cs[VGT_GROUP_PRIM_TYPE] = 0;
-  cs[VGT_GROUP_FIRST_DECR] = 0;
-  cs[VGT_GROUP_DECR] = 0;
-  cs[VGT_GROUP_VECT_0_CNTL] = {0, 0};
-  cs[VGT_GROUP_VECT_0_FMT_CNTL] = {0, 0};
-  cs[VGT_GS_MODE] = 0;
-  cs[VGT_PRIMITIVEID_EN] = 0;
-  cs[VGT_MULTI_PRIM_IB_RESET_EN] = 0;
-  cs[VGT_SHADER_STAGES_EN] = 0;
-  cs[VGT_STRMOUT_CONFIG] = {0, 0};
 }
 
 void r800_state::set_default_sq()
@@ -559,14 +495,15 @@ void r800_state::set_default_state()
 {
   start_3d();
   set_default_sq();
-  sq_setup();
-  
-  cs[SQ_LDS_ALLOC_PS] = 0;
-  cs[SQ_DYN_GPR_RESOURCE_LIMIT_1] = 0;
+
+  //TODO
 }
 
 void r800_state::set_spi_defaults()
 {
+  cs[SPI_CONFIG_CNTL] = 0;
+  cs[SPI_CONFIG_CNTL_1] = X_DELAY_22_CLKS;
+
   cs[SPI_PS_INPUT_CNTL_0] = {0, 0};
   cs[SPI_INPUT_Z] = 0;
   cs[SPI_FOG_CNTL] = 0;
@@ -577,7 +514,217 @@ void r800_state::set_spi_defaults()
   cs[SPI_VS_OUT_ID_0] = 0;
   cs[SPI_INTERP_CONTROL_0] = 0;
   cs[SPI_PS_IN_CONTROL_0] = {LINEAR_GRADIENT_ENA_bit, 0};
+  cs[SPI_COMPUTE_INPUT_CNTL] = 0;
+}
+
+void r800_state::set_pa_defaults()
+{
+  cs[PA_CL_ENHANCE] = 3 << 1 | 1;
+  cs[PA_CL_CLIP_CNTL] = 0;
   
+  cs[PA_SC_VPORT_ZMIN_0] = 0.0f;
+  cs[PA_SC_VPORT_ZMAX_0] = 1.0f;
+  cs[PA_SC_WINDOW_OFFSET] = 0;
+  cs[PA_SC_CLIPRECT_RULE] = CLIP_RULE_mask;
+  cs[PA_SC_EDGERULE] = 0xAAAAAAAA;
+  cs[PA_SU_HARDWARE_SCREEN_OFFSET] = 0;
+  
+  for (int i = 0; i < PA_SC_CLIPRECT_0_TL_num; i++)
+  {
+    cs[PA_SC_CLIPRECT_0_TL + i * PA_SC_CLIPRECT_0_TL_offset] = {
+    ((0 << PA_SC_CLIPRECT_0_TL__TL_X_shift) |
+	(0 << PA_SC_CLIPRECT_0_TL__TL_Y_shift)), 
+    ((8192 << PA_SC_CLIPRECT_0_BR__BR_X_shift) |
+	(8192 << PA_SC_CLIPRECT_0_BR__BR_Y_shift))
+    };
+  }
+  
+  for (int i = 0; i < PA_SC_VPORT_SCISSOR_0_TL_num; i++)
+  {
+    cs[PA_SC_VPORT_SCISSOR_0_TL + i * PA_SC_VPORT_SCISSOR_0_TL_offset] = {
+    ((0 << PA_SC_VPORT_SCISSOR_0_TL__TL_X_shift) |
+	(0 << PA_SC_VPORT_SCISSOR_0_TL__TL_Y_shift) |
+	WINDOW_OFFSET_DISABLE_bit),
+    ((8192 << PA_SC_VPORT_SCISSOR_0_BR__BR_X_shift) |
+	(8192 << PA_SC_VPORT_SCISSOR_0_BR__BR_Y_shift))
+    };
+  }
+  
+  cs[PA_SC_MODE_CNTL] = {0, 0};
+  cs[PA_SC_LINE_CNTL] = vector<uint32_t>{0, 0, (X_ROUND_TO_EVEN << PA_SU_VTX_CNTL__ROUND_MODE_shift) |
+      PIX_CENTER_bit};
+  cs[PA_CL_GB_VERT_CLIP_ADJ] = 1.0f;
+  cs[PA_CL_GB_VERT_DISC_ADJ] = 1.0f;
+  cs[PA_CL_GB_HORZ_CLIP_ADJ] = 1.0f;
+  cs[PA_CL_GB_HORZ_DISC_ADJ] = 1.0f;
+  cs[PA_SC_AA_SAMPLE_LOCS_0] = {0, 0, 0, 0, 0, 0, 0, 0};
+  cs[PA_SC_AA_MASK] = 0xFFFFFFFF;
+  cs[PA_CL_CLIP_CNTL] = CLIP_DISABLE_bit;
+  cs[PA_CL_VTE_CNTL] = VTX_XY_FMT_bit;
+  cs[PA_CL_VS_OUT_CNTL] = 0;
+  cs[PA_CL_NANINF_CNTL] = 0;
+  cs[PA_SU_LINE_STIPPLE_CNTL] = 0;
+  cs[PA_SU_LINE_STIPPLE_SCALE] = 0;
+  cs[PA_SU_PRIM_FILTER_CNTL] = 0;
+  cs[PA_SU_POLY_OFFSET_DB_FMT_CNTL] = {0, 0, 0, 0, 0, 0};
+  cs[PA_SC_LINE_STIPPLE] = 0;
+  cs[PA_SC_MODE_CNTL] = {0, 0};
+  
+  set_dummy_scissors(); //that's PA too
+  
+  cs[PA_SU_LINE_CNTL] = 0; //(8 << PA_SU_LINE_CNTL__WIDTH_shift);
+  cs[PA_SU_SC_MODE_CNTL] = CULL_FRONT_bit | CULL_BACK_bit | FACE_bit  | ( 2 << POLYMODE_FRONT_PTYPE_shift) | ( 2 << POLYMODE_BACK_PTYPE_shift);
+  cs[PA_SU_POINT_SIZE] = 0;
+  cs[PA_SU_POINT_MINMAX] = 0;
+}
+
+void r800_state::set_vgt_defaults()
+{
+  cs[VGT_OUTPUT_PATH_CNTL] = 0;
+  cs[VGT_HOS_CNTL] = 0;
+  cs[VGT_HOS_MAX_TESS_LEVEL] = 0;
+  cs[VGT_HOS_MIN_TESS_LEVEL] = 0;
+  cs[VGT_HOS_REUSE_DEPTH] = 0;
+  cs[VGT_GROUP_PRIM_TYPE] = 0;
+  cs[VGT_GROUP_FIRST_DECR] = 0;
+  cs[VGT_GROUP_DECR] = 0;
+  cs[VGT_GROUP_VECT_0_CNTL] = 0;
+  cs[VGT_GROUP_VECT_1_CNTL] = 0;
+  cs[VGT_GROUP_VECT_0_FMT_CNTL] = 0;
+  cs[VGT_GROUP_VECT_1_FMT_CNTL] = 0;
+  cs[VGT_STRMOUT_CONFIG] = 0;
+  cs[VGT_STRMOUT_BUFFER_CONFIG] = 0;
+  cs[VGT_REUSE_OFF] = 0;
+  cs[VGT_VTX_CNT_EN] = 0;
+
+  cs[VGT_MAX_VTX_INDX] = 0xFFFFFFFF;
+  cs[VGT_MIN_VTX_INDX] = 0;
+  cs[VGT_INDX_OFFSET] = 0;
+  cs[VGT_MULTI_PRIM_IB_RESET_INDX] = 0;
+  
+  cs[VGT_INSTANCE_STEP_RATE_0] = {0, 0};
+  cs[VGT_REUSE_OFF] = 0;
+  cs[VGT_VTX_CNT_EN] = 0;
+ 
+  
+  cs[VGT_OUTPUT_PATH_CNTL] = 0;
+  cs[VGT_HOS_CNTL] = 0;
+  cs[VGT_HOS_MAX_TESS_LEVEL] = 0;
+  cs[VGT_HOS_MIN_TESS_LEVEL] = 0;
+  cs[VGT_HOS_REUSE_DEPTH] = 0;
+  cs[VGT_GROUP_PRIM_TYPE] = 0;
+  cs[VGT_GROUP_FIRST_DECR] = 0;
+  cs[VGT_GROUP_DECR] = 0;
+  cs[VGT_GROUP_VECT_0_CNTL] = {0, 0};
+  cs[VGT_GROUP_VECT_0_FMT_CNTL] = {0, 0};
+  cs[VGT_PRIMITIVEID_EN] = 0;
+  cs[VGT_MULTI_PRIM_IB_RESET_EN] = 0;
+  
+  cs[VGT_GS_MODE] = GS_OFF | COMPUTE_MODE_bit | PARTIAL_THD_AT_EOI_bit;
+  cs[VGT_SHADER_STAGES_EN] = CS_STAGE_ON << LS_EN_shift; // HS VS GS ES is in default 0, which is OFF, or for VS  its VS_STAGE_REAL
+  
+  cs[VGT_STRMOUT_CONFIG] = {0, 0};
+
+}
+
+void r800_state::set_db_defaults()
+{
+  cs[DB_Z_INFO] = 0;
+  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+  
+  cs[DB_STENCIL_INFO] = 0;
+  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+  
+  cs[DB_HTILE_DATA_BASE] = 0;
+  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+  
+  cs[DB_DEPTH_CONTROL] = 0;
+
+  cs[DB_SHADER_CONTROL] = 0; 
+  cs[DB_RENDER_CONTROL] = STENCIL_COMPRESS_DISABLE_bit | DEPTH_COMPRESS_DISABLE_bit | COLOR_DISABLE_bit;
+  cs[DB_COUNT_CONTROL] = 0;
+  cs[DB_DEPTH_VIEW] = 0;
+  cs[DB_RENDER_OVERRIDE] = {0, 0};
+  cs[DB_PRELOAD_CONTROL] = 0;
+  cs[DB_SRESULTS_COMPARE_STATE] = {0, 0};
+  
+  cs[DB_STENCIL_CLEAR] = 0;
+  cs[DB_DEPTH_CLEAR] = 0;
+  cs[DB_ALPHA_TO_MASK] = 0;
+
+}
+
+void r800_state::set_sx_defaults()
+{
+  cs[SX_MISC] = 0;  
+  cs[SX_ALPHA_TEST_CONTROL] = {0, 0, 0, 0, 0};
+}
+
+
+void r800_state::set_lds(int num_lds, int size, int num_waves)
+{
+  cs[SQ_LDS_RESOURCE_MGMT] = num_lds << NUM_LS_LDS_shift;
+  cs[SQ_LDS_ALLOC] = (size << SQ_LDS_ALLOC_SIZE_SHIFT) | (num_waves << SQ_LDS_ALLOC_HS_NUM_WAVES_SHIFT);
+}
+
+void r800_state::set_gds(uint32_t addr, uint32_t size)
+{
+  cs[GDS_ORDERED_WAVE_PER_SE] = 1;
+  cs[GDS_ADDR_BASE] = addr;
+  cs[GDS_ADDR_SIZE] = size;
+}
+
+void r800_state::set_export(radeon_bo* bo, int offset, int size)
+{
+  if (size)
+  {
+    cs[SX_MEMORY_EXPORT_BASE] = offset;
+    cs.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+  }
+  
+  cs[SX_MEMORY_EXPORT_SIZE] = size;
+  
+/** for cayman
+  SX_SCATTER_EXPORT_BASE
+  SX_SCATTER_EXPORT_SIZE
+*/
+}
+
+void r800_state::set_tmp_ring(radeon_bo* bo, int offset, int size)
+{
+  if (size)
+  {
+    cs[SQ_LSTMP_RING_BASE] = offset;
+    cs.reloc(bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
+  }
+  
+  cs[SQ_LSTMP_RING_SIZE] = size;
+}
+
+void r800_state::select_se(int se_index, bool broadcast_writes)
+{
+  cs[GRBM_GFX_INDEX] = INSTANCE_INDEX(0) | SE_INDEX(se_index) | INSTANCE_BROADCAST_WRITES | (broadcast_writes ? SE_BROADCAST_WRITES : 0);
+}
+
+void r800_state::direct_dispatch(int groupnum, int local_size)
+{
+  cs[VGT_PRIMITIVE_TYPE] = DI_PT_POINTLIST;
+  
+  cs[VGT_COMPUTE_START_X] = 0;
+  cs[VGT_COMPUTE_START_Y] = 0;
+  cs[VGT_COMPUTE_START_Z] = 0;
+  
+  cs[SPI_COMPUTE_NUM_THREAD_X] = local_size;
+  cs[SPI_COMPUTE_NUM_THREAD_Y] = 1;
+  cs[SPI_COMPUTE_NUM_THREAD_Z] = 1;
+ 
+  cs[VGT_NUM_INDICES] = local_size;
+  
+  cs[VGT_COMPUTE_THREAD_GROUP_SIZE] = local_size;
+  
+  cs.packet3(PACKET3_DISPATCH_DIRECT,
+	     { groupnum, 1, 1, 1}
+  );
 }
 
 void r800_state::set_draw_auto(int num_indices)
@@ -816,42 +963,58 @@ void r800_state::setup_const_cache(int cache_id, struct radeon_bo* cbo, int size
 
 void r800_state::prepare_compute_shader(compute_shader* sh)
 {
-  //we actually prepare a PS VS pair, and use the VS
-
   set_surface_sync(SH_ACTION_ENA_bit,
 		  sh->alloc_size, 0,
 		  sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
 		  
-  set_surface_sync(SH_ACTION_ENA_bit,
-		  sizeof(dummy_ps_shader_binary), 0,
-		  dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
+//   set_surface_sync(SH_ACTION_ENA_bit,
+// 		  sizeof(dummy_ps_shader_binary), 0,
+// 		  dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
+// 
+//     cs[SQ_PGM_START_PS] = 0;
+//     cs.reloc(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
+//     cs[SQ_PGM_RESOURCES_PS] = {
+//       (/*num_gprs*/1 | (0 << STACK_SIZE_shift)),
+//       SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
+//     };
+//     cs[SQ_PGM_START_VS] = 0;
+//     cs.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+//     cs[SQ_PGM_RESOURCES_VS] = {
+//       (sh->num_gprs | (sh->stack_size << STACK_SIZE_shift)) | PRIME_CACHE_ENABLE,
+//       SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
+//     };
+//     
+//     cs[SQ_LDS_ALLOC_PS] = sh->lds_alloc; //in 32 bit words
+//     cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_1] = (0 << PS_GGPR_BASE_shift) | (sh->global_gprs << VS_GGPR_BASE_shift);
+//     cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = 0;
+//     cs[SQ_THREAD_RESOURCE_MGMT] = (sq_conf.num_ps_threads << NUM_PS_THREADS_shift) | (sh->thread_num << NUM_VS_THREADS_shift);
+//     cs[SQ_STACK_RESOURCE_MGMT_1] = (1 << NUM_PS_STACK_ENTRIES_shift) | (sh->stack_size << NUM_VS_STACK_ENTRIES_shift);
+//     cs[SQ_PGM_EXPORTS_PS] = 2; 
 
-    cs[SQ_PGM_START_PS] = 0;
-    cs.reloc(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
-    cs[SQ_PGM_RESOURCES_PS] = {
-      (/*num_gprs*/1 | (0 << STACK_SIZE_shift)),
-      SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
-    };
-    cs[SQ_PGM_START_VS] = 0;
-    cs.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-    cs[SQ_PGM_RESOURCES_VS] = {
-      (sh->num_gprs | (sh->stack_size << STACK_SIZE_shift)) | PRIME_CACHE_ENABLE,
-      SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
-    };
-    
-    cs[SQ_LDS_ALLOC_PS] = sh->lds_alloc; //in 32 bit words
-    cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_1] = (0 << PS_GGPR_BASE_shift) | (sh->global_gprs << VS_GGPR_BASE_shift);
-    cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = 0;
-    cs[SQ_THREAD_RESOURCE_MGMT] = (sq_conf.num_ps_threads << NUM_PS_THREADS_shift) | (sh->thread_num << NUM_VS_THREADS_shift);
-    cs[SQ_STACK_RESOURCE_MGMT_1] = (1 << NUM_PS_STACK_ENTRIES_shift) | (sh->stack_size << NUM_VS_STACK_ENTRIES_shift);
-    cs[SQ_PGM_EXPORTS_PS] = 2; 
+  cs[SQ_PGM_START_LS] = 0;
+  cs.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+  
+  cs[SQ_PGM_RESOURCES_LS] = {
+    (sh->num_gprs << NUM_GPRS_shift) | (sh->stack_size << STACK_SIZE_shift) | PRIME_CACHE_ENABLE,
+    SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
+  };
+  
+  cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_1] = 0;
+  cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = (sh->global_gprs << LS_GGPR_BASE_shift) | (sh->global_gprs << CS_GGPR_BASE_shift);
+  
+  cs[SQ_STACK_RESOURCE_MGMT_3] = sh->stack_size << NUM_LS_STACK_ENTRIES_shift;
+  cs[SQ_THREAD_RESOURCE_MGMT_2] = sh->thread_num << NUM_LS_THREADS_shift;
+  
+  set_tmp_ring(NULL, 0, 0);
+  
+   set_lds(0, 0, 0);
 }
 
 void r800_state::execute_shader(compute_shader* sh)
 {
   upload_dummy_ps();
   
-  cs.add_persistent_bo(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+//   cs.add_persistent_bo(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
   cs.add_persistent_bo(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
   cs.add_persistent_bo(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
   cs.add_persistent_bo(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
@@ -863,12 +1026,19 @@ void r800_state::execute_shader(compute_shader* sh)
   
   set_default_state();
   
-  set_dummy_scissors();
-  
+  set_sx_defaults();
+  set_export(NULL, 0, 0);
+  set_db_defaults();
+  sq_setup();
   prepare_compute_shader(sh);
-  
-  set_dummy_render_target();
+
+  set_vgt_defaults();
+  set_pa_defaults();
   set_spi_defaults();
+  
+  direct_dispatch(1, 20);
+  
+//   set_dummy_render_target();
   
 //   setup_const_cache(0, dummy_bo, 256, 0);
 
@@ -887,11 +1057,6 @@ void r800_state::execute_shader(compute_shader* sh)
 //   vtxr.dst_sel_w       = SQ_SEL_W;
 //   set_vtx_resource(&vtxr, RADEON_GEM_DOMAIN_VRAM);
 
-  set_draw_auto(3);
-  
-  set_surface_sync((CB_ACTION_ENA_bit | CB0_DEST_BASE_ENA_bit), 16*16, 0, dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-  
-  cs.packet3(IT_EVENT_WRITE, {CACHE_FLUSH_AND_INV_TS_EVENT});
-  cs.packet3(IT_EVENT_WRITE, {DB_CACHE_FLUSH_AND_INV});
+//   set_draw_auto(3);
 }
 

@@ -69,7 +69,7 @@ int main()
 //      if (0)
      {
       r800_state state(fd);
-      compute_shader sh(&state, "/home/rakadam/Projects/drm_prb/dummy_vs.bin");
+      compute_shader sh(&state, "first_cs.bin");
       radeon_bo* buffer = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
       radeon_bo_map(buffer, 1);
       uint32_t *ptr = (uint32_t*)buffer->ptr;
@@ -84,6 +84,8 @@ int main()
       state.execute_shader(&sh);
 //       state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 16*16*4, 0, buffer, 0, RADEON_GEM_DOMAIN_VRAM);
       state.flush_cs();
+      
+      sleep(1);
       
       radeon_bo_map(buffer, 0);
       ptr = (uint32_t*)buffer->ptr;

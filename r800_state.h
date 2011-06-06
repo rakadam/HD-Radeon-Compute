@@ -320,6 +320,18 @@ class r800_state
     void set_default_sq();
     void set_default_state();
     void set_spi_defaults();
+    void set_pa_defaults();
+    void set_vgt_defaults();
+    void set_db_defaults();
+    void set_sx_defaults();
+    
+    void set_lds(int num_lds, int size, int num_waves);
+    void set_gds(uint32_t addr, uint32_t size);
+    void set_export(radeon_bo* bo, int offset, int size);
+    void set_tmp_ring(radeon_bo* bo, int offset, int size);    
+    void select_se(int se_index, bool broadcast_writed);
+    void direct_dispatch(int groupnum, int local_size);
+    
     void set_draw_auto(int num_indices);
     void set_dummy_render_target();
     void set_rat(int id, radeon_bo* bo, int start, int size);

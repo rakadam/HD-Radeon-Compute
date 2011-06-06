@@ -54,6 +54,9 @@ extern "C" {
 #define RADEON_CP_PACKET2 0x80000000
 #define RADEON_CP_PACKET3 0xC0000000
 
+#define RADEON_CP_PACKET3_COMPUTE_MODE 0x00000002
+
+
 #define CP_PACKET0(reg, n)                                              \
         (RADEON_CP_PACKET0 | ((n) << 16) | ((reg) >> 2))
 #define CP_PACKET1(reg0, reg1)                                          \
@@ -147,7 +150,7 @@ void radeon_cmd_stream::write_float(float f)
 void radeon_cmd_stream::packet3(uint32_t cmd, uint32_t num)
 {
   assert(num);
-  write_dword(RADEON_CP_PACKET3 | ((cmd) << 8) | ((((num) - 1) & 0x3fff) << 16));
+  write_dword(RADEON_CP_PACKET3 | ((cmd) << 8) | ((((num) - 1) & 0x3fff) << 16) | RADEON_CP_PACKET3_COMPUTE_MODE);
 }
 
 void radeon_cmd_stream::packet3(uint32_t cmd, std::vector<uint32_t> vals)
