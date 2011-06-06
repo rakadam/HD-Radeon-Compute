@@ -1027,7 +1027,7 @@ void r800_state::execute_shader(compute_shader* sh)
   set_default_state();
   
   set_sx_defaults();
-  set_export(NULL, 0, 0);
+//   set_export(NULL, 0, 0); //Forbidden register. drm bug
   set_db_defaults();
   sq_setup();
   prepare_compute_shader(sh);
@@ -1036,7 +1036,7 @@ void r800_state::execute_shader(compute_shader* sh)
   set_pa_defaults();
   set_spi_defaults();
   
-  direct_dispatch(1, 20);
+  direct_dispatch(1, 1);
   
 //   set_dummy_render_target();
   
