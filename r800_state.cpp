@@ -1036,7 +1036,7 @@ void r800_state::execute_shader(compute_shader* sh)
   set_pa_defaults();
   set_spi_defaults();
   
-  direct_dispatch(1, 1);
+  direct_dispatch(1, 256);
   
 //   set_dummy_render_target();
   
