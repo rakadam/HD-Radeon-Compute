@@ -49,8 +49,8 @@ struct cs_image_header
   uint32_t num_gprs;
   uint32_t temp_gprs;
   uint32_t global_gprs;
-  uint32_t stack_size;
-  uint32_t thread_num;
+  uint32_t stack_size; //stack size in enties
+  uint32_t thread_num; //how much wavefronts are allowed per SIMD
   uint32_t dyn_gpr_limit;
   uint32_t reserved[6];
 } __attribute__((packed));

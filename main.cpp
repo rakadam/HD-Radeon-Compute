@@ -76,7 +76,7 @@ int main()
       
       for (int i = 0; i < 256; i++)
       {
-	ptr[i] = i;
+	ptr[i] = 0xF;
       }
       
       radeon_bo_unmap(buffer);
@@ -84,10 +84,19 @@ int main()
       state.execute_shader(&sh);
 //       state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 16*16*4, 0, buffer, 0, RADEON_GEM_DOMAIN_VRAM);
       state.flush_cs();
+      printf("emitted\n");
       
-      usleep(100000);
+      uint32_t w = RADEON_GEM_DOMAIN_VRAM;
+      
+      while (radeon_bo_is_busy(buffer, &w))
+      {
+	sleep(1);
+	printf(".\n");
+      }
       
       radeon_bo_map(buffer, 0);
+      printf("mapped\n");
+      
       ptr = (uint32_t*)buffer->ptr;
       
       for (int i = 0; i < 256; i++)

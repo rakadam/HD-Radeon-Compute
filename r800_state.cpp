@@ -999,6 +999,11 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
     SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
   };
   
+  uint32_t tt = (sh->num_gprs << NUM_GPRS_shift) | (sh->stack_size << STACK_SIZE_shift) | PRIME_CACHE_ENABLE;
+  
+  
+  printf("%.8X\n", tt);
+  
   cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_1] = 0;
   cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = (sh->global_gprs << LS_GGPR_BASE_shift) | (sh->global_gprs << CS_GGPR_BASE_shift);
   
@@ -1036,7 +1041,13 @@ void r800_state::execute_shader(compute_shader* sh)
   set_pa_defaults();
   set_spi_defaults();
   
-  direct_dispatch(1, 256);
+  
+//   for (int i = 0; i < SQ_LOOP_CONST_cs_num*4; i++)
+  {
+    cs[SQ_LOOP_CONST + SQ_LOOP_CONST_cs*4 /*+ i*/] = (1 << SQ_LOOP_CONST_0__COUNT_shift) | (0 << INIT_shift) | (1 << INC_shift);
+  }
+  
+  direct_dispatch(1, 64);
   
 //   set_dummy_render_target();
   
