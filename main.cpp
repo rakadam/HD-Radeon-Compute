@@ -77,12 +77,23 @@ int main()
       for (int i = 0; i < 256; i++)
       {
 	ptr[i] = 0xF;
-      }
-      
+      } 
       radeon_bo_unmap(buffer);
+      
+      radeon_bo* buffer2 = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+      radeon_bo_map(buffer2, 1);
+      ptr = (uint32_t*)buffer2->ptr;
+      
+      for (int i = 0; i < 256; i++)
+      {
+	ptr[i] = 0x2;
+      } 
+      radeon_bo_unmap(buffer2);
+      
       state.set_rat(2, buffer, 0, 1024);
+      state.set_rat(3, buffer2, 0, 1024);
+      
       state.execute_shader(&sh);
-//       state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 16*16*4, 0, buffer, 0, RADEON_GEM_DOMAIN_VRAM);
       state.flush_cs();
       printf("emitted\n");
       

@@ -127,6 +127,7 @@ radeon_cmd_stream::regsetter radeon_cmd_stream::operator[](uint32_t index)
 
 void radeon_cmd_stream::reloc(struct radeon_bo * bo, uint32_t rd, uint32_t wr)
 {
+  cout << "reloc " << bo << " " << rd << " " << wr << endl;
   queue.push_back(token(bo, rd, wr));
   reloc_num++;
 }
@@ -268,8 +269,11 @@ void radeon_cmd_stream::cs_emit()
   {
     if (queue[i].bo_reloc)
     {
-      if (radeon_cs_write_reloc((radeon_cs*)cs, queue[i].bo, queue[i].rd, queue[i].wd, 0))
+      int err;
+      if (err = radeon_cs_write_reloc((radeon_cs*)cs, queue[i].bo, queue[i].rd, queue[i].wd, 0))
       {
+	cerr << queue[i].bo << " " << queue[i].rd << " " << queue[i].wd ;
+	drmError(err, "");
 	throw runtime_error("Relocation error");
       }
     }

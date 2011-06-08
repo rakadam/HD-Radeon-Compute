@@ -853,9 +853,12 @@ void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
 {
   int offset;
   
+  int rd = 0;
+  int wd = RADEON_GEM_DOMAIN_VRAM;
+  
   assert(id < 12);
   
-  cs.add_persistent_bo(bo, 0, RADEON_GEM_DOMAIN_VRAM); //FIXME
+  cs.add_persistent_bo(bo, rd, wd);
     
   if (id < 8)
   {
@@ -870,35 +873,37 @@ void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
   assert((start & 0xFF) == 0);
   
   cs[CB_COLOR0_BASE + offset] = start >> 8;
-  cs.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+  cs.reloc(bo, rd, wd);
 
   cs[CB_IMMED0_BASE + id*8] = start >> 8;
-  cs.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+  cs.reloc(bo, rd, wd);
   
   cs[CB_COLOR0_PITCH + offset] = 0; //(16 / 8) - 1;
   cs[CB_COLOR0_SLICE + offset] = 0; //((16*16) / 64) - 1;
   cs[CB_COLOR0_VIEW + offset] = 0;
 
   cs[CB_COLOR0_INFO + offset] = RAT_bit;
-  cs.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+  cs.reloc(bo, rd, wd);
   
   cs[CB_COLOR0_ATTRIB + offset] = CB_COLOR0_ATTRIB__NON_DISP_TILING_ORDER_bit;
-  cs.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+  cs.reloc(bo, rd, wd);
   
-  cs[CB_COLOR0_DIM + offset] = size >> 2; //for RATs its a linear buffer size! TODO: ask agd5f!
+  cs[CB_COLOR0_DIM + offset] = size >> 2; //for RATs its a linear buffer size!
       
   if (id < 8)
   {
     cs[CB_COLOR0_CMASK + offset] = 0;
-    cs.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+    cs.reloc(bo, rd, wd);
 
     cs[CB_COLOR0_FMASK + offset] = 0;
-    cs.reloc(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+    cs.reloc(bo, rd, wd);
 
     cs[CB_COLOR0_CMASK_SLICE + offset] = 0;
     cs[CB_COLOR0_FMASK_SLICE + offset] = 0;
     cs[CB_COLOR0_CLEAR_WORD0 + offset] = {0, 0, 0, 0};
   }
+  
+  set_surface_sync(CB_ACTION_ENA_bit | CB2_DEST_BASE_ENA_bit | FULL_CACHE_ENA_bit | DEST_BASE_0_ENA_bit, 1024*1024, 0, bo,/* RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); //FIXME CBn_DEST_BASE_ENA_bit
 }
 
 void r800_state::flush_cs()
@@ -1046,6 +1051,8 @@ void r800_state::execute_shader(compute_shader* sh)
   {
     cs[SQ_LOOP_CONST + SQ_LOOP_CONST_cs*4 /*+ i*/] = (1 << SQ_LOOP_CONST_0__COUNT_shift) | (0 << INIT_shift) | (1 << INC_shift);
   }
+  
+//   cs[CP_COHER_CNTL] = CB_ACTION_ENA_bit;
   
   direct_dispatch(1, 64);
   
