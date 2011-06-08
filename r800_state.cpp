@@ -133,8 +133,6 @@ r800_state::r800_state(int fd) : fd(fd), cs(fd)
   
   ChipFamily = CHIP_FAMILY_PALM; //TODO: fix it
   
-
-  
   printf("mem size init: gart size :%llx vram size: s:%llx visible:%llx\n",
     (unsigned long long)mminfo.gart_size,
     (unsigned long long)mminfo.vram_size,
@@ -148,12 +146,14 @@ r800_state::r800_state(int fd) : fd(fd), cs(fd)
   cs.set_limit(RADEON_GEM_DOMAIN_GTT, mminfo.gart_size);
   cs.set_limit(RADEON_GEM_DOMAIN_VRAM, mminfo.vram_size);
 
-  dummy_bo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+/*  dummy_bo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   dummy_bo_ps = bo_open(sizeof(dummy_ps_shader_binary), 0, RADEON_GEM_DOMAIN_VRAM, 0);
   dummy_bo_cb = bo_open(8*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   dummy_vbo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   
-  cout << "dummy_bo:" << dummy_bo_ps << " " << dummy_bo_ps->handle << endl;
+  cout << "dummy_bo:" << dummy_bo_ps << " " << dummy_bo_ps->handle << endl;*/
+  
+  set_default_state();
 }
 
 r800_state::~r800_state()
@@ -295,8 +295,8 @@ void r800_state::sq_setup()
   
   cs[CB_BLEND0_CONTROL] = {0, 0, 0, 0, 0, 0, 0, 0};
   
-  cs[SQ_PGM_START_FS] = 0;
-  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+/*  cs[SQ_PGM_START_FS] = 0;
+  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);*/
   
   cs[SQ_PGM_RESOURCES_FS] = 0; //we won't use fetch shaders
   
@@ -495,8 +495,20 @@ void r800_state::set_default_state()
 {
   start_3d();
   set_default_sq();
+  
+  set_sx_defaults();
+  set_export(NULL, 0, 0);
+  set_db_defaults();
+  sq_setup();
 
-  //TODO
+  set_vgt_defaults();
+  set_pa_defaults();
+  set_spi_defaults();
+  
+  for (int i = 0; i < 12; i++)
+  {
+    set_rat_defaults(i);
+  }
 }
 
 void r800_state::set_spi_defaults()
@@ -629,14 +641,14 @@ void r800_state::set_vgt_defaults()
 
 void r800_state::set_db_defaults()
 {
-  cs[DB_Z_INFO] = 0;
-  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-  
-  cs[DB_STENCIL_INFO] = 0;
-  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-  
-  cs[DB_HTILE_DATA_BASE] = 0;
-  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+//   cs[DB_Z_INFO] = 0;
+//   cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+//   
+//   cs[DB_STENCIL_INFO] = 0;
+//   cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
+//   
+//   cs[DB_HTILE_DATA_BASE] = 0;
+//   cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
   
   cs[DB_DEPTH_CONTROL] = 0;
 
@@ -688,6 +700,11 @@ void r800_state::set_export(radeon_bo* bo, int offset, int size)
   SX_SCATTER_EXPORT_BASE
   SX_SCATTER_EXPORT_SIZE
 */
+
+  if (bo)
+  {
+    cs.add_persistent_bo(bo, 0, RADEON_GEM_DOMAIN_VRAM);
+  }
 }
 
 void r800_state::set_tmp_ring(radeon_bo* bo, int offset, int size)
@@ -878,10 +895,6 @@ void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
   cs[CB_IMMED0_BASE + id*8] = start >> 8;
   cs.reloc(bo, rd, wd);
   
-  cs[CB_COLOR0_PITCH + offset] = 0; //(16 / 8) - 1;
-  cs[CB_COLOR0_SLICE + offset] = 0; //((16*16) / 64) - 1;
-  cs[CB_COLOR0_VIEW + offset] = 0;
-
   cs[CB_COLOR0_INFO + offset] = RAT_bit;
   cs.reloc(bo, rd, wd);
   
@@ -897,13 +910,38 @@ void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
 
     cs[CB_COLOR0_FMASK + offset] = 0;
     cs.reloc(bo, rd, wd);
+  }
+  
+  set_surface_sync(CB_ACTION_ENA_bit /*| CB2_DEST_BASE_ENA_bit*/ | FULL_CACHE_ENA_bit, 1024*1024, 0, bo,/* RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); //FIXME CBn_DEST_BASE_ENA_bit
+}
 
+void r800_state::set_rat_defaults(int id)
+{
+  int offset;
+  
+  assert(id < 12);
+  
+  if (id < 8)
+  {
+    offset = id*0x3c;
+  }
+  else
+  {
+    offset = 8*0x3c + (id-8)*0x1c;
+  }
+    
+  cs[CB_COLOR0_PITCH + offset] = 0;
+  cs[CB_COLOR0_SLICE + offset] = 0;
+  cs[CB_COLOR0_VIEW + offset] = 0;
+  
+  cs[CB_COLOR0_DIM + offset] = 0;
+      
+  if (id < 8)
+  {
     cs[CB_COLOR0_CMASK_SLICE + offset] = 0;
     cs[CB_COLOR0_FMASK_SLICE + offset] = 0;
     cs[CB_COLOR0_CLEAR_WORD0 + offset] = {0, 0, 0, 0};
   }
-  
-  set_surface_sync(CB_ACTION_ENA_bit | CB2_DEST_BASE_ENA_bit | FULL_CACHE_ENA_bit | DEST_BASE_0_ENA_bit, 1024*1024, 0, bo,/* RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); //FIXME CBn_DEST_BASE_ENA_bit
 }
 
 void r800_state::flush_cs()
@@ -952,18 +990,18 @@ void r800_state::setup_const_cache(int cache_id, struct radeon_bo* cbo, int size
   set_surface_sync(SH_ACTION_ENA_bit,
 		size, offset,
 		cbo, RADEON_GEM_DOMAIN_VRAM, 0);
-  cs[SQ_ALU_CONST_BUFFER_SIZE_VS_0+cache_id] = size;
+		
+  cs[SQ_ALU_CONST_BUFFER_SIZE_LS_0+cache_id] = size;
 
+  assert(size < SQ_ALU_CONST_BUFFER_SIZE_LS_0__DATA_mask);
+  
   assert((offset & 0xFF) == 0);
-  cs[SQ_ALU_CONST_CACHE_VS_0+cache_id] = offset >> 8;
-  cs.reloc(cbo, radeon_bo_get_src_domain(cbo), 0);
+  cs[SQ_ALU_CONST_CACHE_LS_0+cache_id] = offset >> 8;
+  cs.reloc(cbo, RADEON_GEM_DOMAIN_VRAM, 0);
 
-  assert(cache_id < SQ_ALU_CONST_BUFFER_SIZE_PS_0_num);
-
-  cs[SQ_ALU_CONST_BUFFER_SIZE_PS_0+cache_id] = size;
-  assert((offset & 0xFF) == 0);
-  cs[SQ_ALU_CONST_CACHE_PS_0+cache_id] = offset >> 8;
-  cs.reloc(cbo, radeon_bo_get_src_domain(cbo), 0);
+  assert(cache_id < SQ_ALU_CONST_BUFFER_SIZE_LS_0_num);
+  
+  cs.add_persistent_bo(cbo, RADEON_GEM_DOMAIN_VRAM, 0);
 }
 
 void r800_state::prepare_compute_shader(compute_shader* sh)
@@ -1007,7 +1045,7 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
   uint32_t tt = (sh->num_gprs << NUM_GPRS_shift) | (sh->stack_size << STACK_SIZE_shift) | PRIME_CACHE_ENABLE;
   
   
-  printf("%.8X\n", tt);
+//   printf("%.8X\n", tt);
   
   cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_1] = 0;
   cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = (sh->global_gprs << LS_GGPR_BASE_shift) | (sh->global_gprs << CS_GGPR_BASE_shift);
@@ -1017,46 +1055,23 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
   
   set_tmp_ring(NULL, 0, 0);
   
-   set_lds(0, 0, 0);
+  set_lds(0, 0, 0);
 }
 
 void r800_state::execute_shader(compute_shader* sh)
 {
-  upload_dummy_ps();
-  
-//   cs.add_persistent_bo(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
   cs.add_persistent_bo(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-  cs.add_persistent_bo(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-  cs.add_persistent_bo(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
-  cs.add_persistent_bo(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-  cs.add_persistent_bo(dummy_vbo, RADEON_GEM_DOMAIN_VRAM, 0);
-
 
   cs.space_check();
   
-  set_default_state();
-  
-  set_sx_defaults();
-//   set_export(NULL, 0, 0); //Forbidden register. drm bug
-  set_db_defaults();
-  sq_setup();
   prepare_compute_shader(sh);
-
-  set_vgt_defaults();
-  set_pa_defaults();
-  set_spi_defaults();
-  
   
 //   for (int i = 0; i < SQ_LOOP_CONST_cs_num*4; i++)
   {
     cs[SQ_LOOP_CONST + SQ_LOOP_CONST_cs*4 /*+ i*/] = (1 << SQ_LOOP_CONST_0__COUNT_shift) | (0 << INIT_shift) | (1 << INC_shift);
   }
   
-//   cs[CP_COHER_CNTL] = CB_ACTION_ENA_bit;
-  
-  direct_dispatch(1, 64);
-  
-//   set_dummy_render_target();
+  direct_dispatch(1, 32);
   
 //   setup_const_cache(0, dummy_bo, 256, 0);
 

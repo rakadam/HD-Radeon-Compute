@@ -89,15 +89,22 @@ int main()
 	ptr[i] = 0x2;
       } 
       radeon_bo_unmap(buffer2);
-      
-      state.set_rat(2, buffer, 0, 1024);
-      state.set_rat(3, buffer2, 0, 1024);
-      
-      state.execute_shader(&sh);
-      state.flush_cs();
-      printf("emitted\n");
-      
       uint32_t w = RADEON_GEM_DOMAIN_VRAM;
+
+
+//       for (int ww = 0; ww < 100000; ww++)
+      {
+	state.set_rat(2, buffer, 0, 1024);
+	state.set_gds(0, 100);
+	state.setup_const_cache(0, buffer2, 0, 16*1024);
+        state.setup_const_cache(1, buffer2, 0, 16*1024);
+	state.execute_shader(&sh);
+	state.flush_cs();
+  //       printf("emitted\n");
+	while (radeon_bo_is_busy(buffer, &w));
+      }
+      
+      
       
       while (radeon_bo_is_busy(buffer, &w))
       {
@@ -116,6 +123,19 @@ int main()
       }
       
       radeon_bo_unmap(buffer);
+      
+      cout << endl;
+      
+      radeon_bo_map(buffer2, 0);
+      
+      ptr = (uint32_t*)buffer2->ptr;
+      
+      for (int i = 0; i < 256; i++)
+      {
+	printf("%X ", ptr[i]);
+      }
+      
+      radeon_bo_unmap(buffer2);
       
       cout << endl;
 //       sleep(1);

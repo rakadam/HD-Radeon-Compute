@@ -335,6 +335,7 @@ class r800_state
     void set_draw_auto(int num_indices);
     void set_dummy_render_target();
     void set_rat(int id, radeon_bo* bo, int start, int size);
+    void set_rat_defaults(int id);
     void flush_cs();
     void upload_dummy_ps();
     void set_dummy_scissors();

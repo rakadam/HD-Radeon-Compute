@@ -127,7 +127,7 @@ radeon_cmd_stream::regsetter radeon_cmd_stream::operator[](uint32_t index)
 
 void radeon_cmd_stream::reloc(struct radeon_bo * bo, uint32_t rd, uint32_t wr)
 {
-  cout << "reloc " << bo << " " << rd << " " << wr << endl;
+//   cout << "reloc " << bo << " " << rd << " " << wr << endl;
   queue.push_back(token(bo, rd, wr));
   reloc_num++;
 }
@@ -257,6 +257,8 @@ void radeon_cmd_stream::space_check()
     cerr << ret << " " << pers_bos.size() << endl;
     throw runtime_error("BO space check failure!");
   }
+  
+  pers_bos.clear();
 }
 
 void radeon_cmd_stream::cs_emit()
@@ -299,6 +301,7 @@ void radeon_cmd_stream::add_persistent_bo(struct radeon_bo *bo,
   uint32_t read_domain,
   uint32_t write_domain)
 {
+  assert(bo);
   pers_bos.push_back(token(bo, read_domain, write_domain));
 }
 
