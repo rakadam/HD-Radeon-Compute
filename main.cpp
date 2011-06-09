@@ -52,7 +52,7 @@ int main()
 //     int size = 500*1024*1024;
     assert(drmAvailable());
 
-     int fd = open("/dev/dri/card0", O_RDWR, 0);
+     int fd = open("/dev/dri/card1", O_RDWR, 0);
      
 //      int fd = drmOpen(NULL, "pci:0000:00:01.0");
      
@@ -101,11 +101,11 @@ int main()
 	state.execute_shader(&sh);
 	state.flush_cs();
   //       printf("emitted\n");
-	while (radeon_bo_is_busy(buffer, &w));
+// 	while (radeon_bo_is_busy(buffer, &w));
       }
       
       
-      
+      if (0)
       while (radeon_bo_is_busy(buffer, &w))
       {
 	sleep(1);

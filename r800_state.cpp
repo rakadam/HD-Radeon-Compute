@@ -1071,7 +1071,7 @@ void r800_state::execute_shader(compute_shader* sh)
     cs[SQ_LOOP_CONST + SQ_LOOP_CONST_cs*4 /*+ i*/] = (1 << SQ_LOOP_CONST_0__COUNT_shift) | (0 << INIT_shift) | (1 << INC_shift);
   }
   
-  direct_dispatch(1, 32);
+  direct_dispatch(1, 128);
   
 //   setup_const_cache(0, dummy_bo, 256, 0);
 
