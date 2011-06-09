@@ -52,7 +52,7 @@ int main()
 //     int size = 500*1024*1024;
     assert(drmAvailable());
 
-     int fd = open("/dev/dri/card1", O_RDWR, 0);
+     int fd = open("/dev/dri/card0", O_RDWR, 0);
      
 //      int fd = drmOpen(NULL, "pci:0000:00:01.0");
      
