@@ -101,7 +101,7 @@
 
 using namespace std;
 
-r800_state::r800_state(int fd) : fd(fd), cs(fd)
+r800_state::r800_state(int fd, bool exclusive) : fd(fd), cs(fd), exclusive(exclusive)
 {
   drmSetVersion sv;
 
@@ -110,22 +110,26 @@ r800_state::r800_state(int fd) : fd(fd), cs(fd)
   sv.drm_dd_major = -1;
   sv.drm_dd_minor = -1;
   
-  int ret = drmSetInterfaceVersion(fd, &sv);
-  
-  if (ret != 0)
+  if (exclusive)
   {
-    fprintf(stderr, "Cannot set interface version\n");
-    close(fd);
-    exit(1);
+    int ret = drmSetInterfaceVersion(fd, &sv);
+    
+    if (ret != 0)
+    {
+      fprintf(stderr, "Cannot set interface version\n");
+      close(fd);
+      exit(1);
+    }
+    
+    get_master();
   }
-
+  
   if (drmCommandWriteRead(fd, DRM_RADEON_GEM_INFO, &mminfo, sizeof(mminfo)))
   {
     cerr << "Cannot get GEM info" << endl;
     exit(1);
   }
    
-  get_master();
   
   bom = radeon_bo_manager_gem_ctor(fd);
   assert(bom);
@@ -159,7 +163,10 @@ r800_state::r800_state(int fd) : fd(fd), cs(fd)
 r800_state::~r800_state()
 {
   radeon_bo_manager_gem_dtor(bom);
-  drop_master();
+  if (exclusive)
+  {
+    drop_master();
+  }
 }
 
 struct radeon_bo* r800_state::bo_open(uint32_t size,

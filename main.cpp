@@ -48,139 +48,83 @@ using namespace std;
 
 int main()
 {
-    char* buf;
-//     int size = 500*1024*1024;
-    assert(drmAvailable());
+  char* buf;
+  assert(drmAvailable());
 
-     int fd = open("/dev/dri/card0", O_RDWR, 0);
-     
-//      int fd = drmOpen(NULL, "pci:0000:00:01.0");
-     
-//     struct drm_radeon_gem_info mminfo;
+  int fd = open("/dev/dri/card1", O_RDWR, 0);
 
-//     if (!drmCommandWriteRead(fd, DRM_RADEON_GEM_INFO, &mminfo, sizeof(mminfo)))
-//     {
-// 	printf("mem size init: gart size :%llx vram size: s:%llx visible:%llx\n",
-// 		    (unsigned long long)mminfo.gart_size,
-// 		    (unsigned long long)mminfo.vram_size,
-// 		    (unsigned long long)mminfo.vram_visible);
-//     }
-//      
-//      if (0)
-     {
-      r800_state state(fd);
-      compute_shader sh(&state, "first_cs.bin");
-      radeon_bo* buffer = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
-      radeon_bo_map(buffer, 1);
-      uint32_t *ptr = (uint32_t*)buffer->ptr;
-      
-      for (int i = 0; i < 256; i++)
-      {
-	ptr[i] = 0xF;
-      } 
-      radeon_bo_unmap(buffer);
-      
-      radeon_bo* buffer2 = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
-      radeon_bo_map(buffer2, 1);
-      ptr = (uint32_t*)buffer2->ptr;
-      
-      for (int i = 0; i < 256; i++)
-      {
-	ptr[i] = 0x2;
-      } 
-      radeon_bo_unmap(buffer2);
-      uint32_t w = RADEON_GEM_DOMAIN_VRAM;
+  r800_state state(fd, false);
+  compute_shader sh(&state, "first_cs.bin");
+  radeon_bo* buffer = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  radeon_bo_map(buffer, 1);
+  uint32_t *ptr = (uint32_t*)buffer->ptr;
+
+  for (int i = 0; i < 256; i++)
+  {
+    ptr[i] = 0xF;
+  } 
+  
+  radeon_bo_unmap(buffer);
+
+  radeon_bo* buffer2 = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  radeon_bo_map(buffer2, 1);
+  ptr = (uint32_t*)buffer2->ptr;
+
+  for (int i = 0; i < 256; i++)
+  {
+    ptr[i] = 0x2;
+  } 
+  
+  radeon_bo_unmap(buffer2);
+  uint32_t w = RADEON_GEM_DOMAIN_VRAM;
 
 
-//       for (int ww = 0; ww < 100000; ww++)
-      {
-	state.set_rat(2, buffer, 0, 1024);
-	state.set_gds(0, 100);
-	state.setup_const_cache(0, buffer2, 0, 16*1024);
-        state.setup_const_cache(1, buffer2, 0, 16*1024);
-	state.execute_shader(&sh);
-	state.flush_cs();
-  //       printf("emitted\n");
-// 	while (radeon_bo_is_busy(buffer, &w));
-      }
-      
-      
-      if (0)
-      while (radeon_bo_is_busy(buffer, &w))
-      {
-	sleep(1);
-	printf(".\n");
-      }
-      
-      radeon_bo_map(buffer, 0);
-      printf("mapped\n");
-      
-      ptr = (uint32_t*)buffer->ptr;
-      
-      for (int i = 0; i < 256; i++)
-      {
-	printf("%X ", ptr[i]);
-      }
-      
-      radeon_bo_unmap(buffer);
-      
-      cout << endl;
-      
-      radeon_bo_map(buffer2, 0);
-      
-      ptr = (uint32_t*)buffer2->ptr;
-      
-      for (int i = 0; i < 256; i++)
-      {
-	printf("%X ", ptr[i]);
-      }
-      
-      radeon_bo_unmap(buffer2);
-      
-      cout << endl;
-//       sleep(1);
-     }
-//    int fd = drmOpen("/dev/dri/card0", "pci:0000:01:00.0");
-//     cout << fd << endl;
-//     assert(fd > 0);
-//     cout << drmGetBusid(fd) << endl;
-//     struct radeon_cs_manager * gem = radeon_cs_manager_gem_ctor(fd);
-//     struct radeon_bo_manager * bom = radeon_bo_manager_gem_ctor(fd);
-//     struct radeon_cs *cs = radeon_cs_create(gem, 0);
-//     cout << "cs:" << cs << endl;
-//     cout << gem << " " << bom << endl;
-//     struct radeon_bo * bo = radeon_bo_open(bom, 0, size, 0, RADEON_GEM_DOMAIN_VRAM, 0);
-//     cout << bo << endl;
-// //     cout << radeon_cs_space_check(cs) << endl;
-//     radeon_cs_print(cs, stdout);
-//     
-//     cout << "map:" << radeon_bo_map(bo, 0) << endl;
-//     
-//     buf = (char*)bo->ptr;
-//     cout << (void*)buf << endl;
-//     
-//     cout << "fill" << endl;
-//     memset(buf, 0, size);
-//     cout << "unmap" << endl;
-//     radeon_bo_unmap(bo);
-//     radeon_bo_wait(bo);
-//     cout << "done" << endl;
-//     
-//     
-//     radeon_cs_set_limit(cs, RADEON_GEM_DOMAIN_VRAM, 510*1024*1024);
-//     
-//     radeon_cs_space_add_persistent_bo(cs, bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
-//     cout << "space_check: " << radeon_cs_space_check(cs) << endl;
-//     
-//     radeon_cs_write_reloc(cs, bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM, 0);
-//     
-//     cout << "done" << endl;
-//     radeon_bo_unref(bo);
-//     radeon_cs_destroy(cs);
-//     radeon_bo_manager_gem_dtor(bom);
-//     radeon_cs_manager_gem_dtor(gem);
+  {
+    state.set_rat(2, buffer, 0, 1024);
+    state.set_gds(0, 100);
+    state.setup_const_cache(0, buffer2, 0, 16*1024);
+    state.setup_const_cache(1, buffer2, 0, 16*1024);
+    state.execute_shader(&sh);
+    state.flush_cs();
+  }
 
 
-    drmClose(fd);
+  while (radeon_bo_is_busy(buffer, &w))
+  {
+    sleep(1);
+    printf(".\n");
+  }
+
+  radeon_bo_map(buffer, 0);
+  printf("mapped\n");
+
+  ptr = (uint32_t*)buffer->ptr;
+
+  for (int i = 0; i < 256; i++)
+  {
+    printf("%X ", ptr[i]);
+  }
+
+  radeon_bo_unmap(buffer);
+
+  cout << endl;
+
+  radeon_bo_map(buffer2, 0);
+
+  ptr = (uint32_t*)buffer2->ptr;
+
+  for (int i = 0; i < 256; i++)
+  {
+    printf("%X ", ptr[i]);
+  }
+
+  radeon_bo_unmap(buffer2);
+
+  cout << endl;
+
+
+  radeon_bo_unref(buffer);
+  radeon_bo_unref(buffer2);
+  drmClose(fd);
 }
 

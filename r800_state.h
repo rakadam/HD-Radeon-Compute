@@ -290,6 +290,7 @@ typedef struct {
 class r800_state
 {
   int fd;
+  bool exclusive;
   struct radeon_bo_manager * bom;
   radeon_cmd_stream cs;
   
@@ -301,7 +302,7 @@ class r800_state
   struct radeon_bo *dummy_bo, *dummy_bo_ps, *dummy_bo_cb, *dummy_vbo;
   
   public:
-    r800_state(int fd);
+    r800_state(int fd, bool exclusive = true);
     ~r800_state();
     
     struct radeon_bo *bo_open(uint32_t size,
