@@ -682,7 +682,7 @@ void r800_state::set_sx_defaults()
 
 void r800_state::set_lds(int num_lds, int size, int num_waves)
 {
-  cs[SQ_LDS_RESOURCE_MGMT] = num_lds << NUM_LS_LDS_shift;
+  cs[SQ_LDS_RESOURCE_MGMT] = num_lds << NUM_LS_LDS_shift | 0x1000 /*pixel shader setup workaround for Xorg bug*/;
   cs[SQ_LDS_ALLOC] = (size << SQ_LDS_ALLOC_SIZE_SHIFT) | (num_waves << SQ_LDS_ALLOC_HS_NUM_WAVES_SHIFT);
 }
 

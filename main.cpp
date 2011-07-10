@@ -51,7 +51,7 @@ int main()
   char* buf;
   assert(drmAvailable());
 
-  int fd = open("/dev/dri/card1", O_RDWR, 0);
+  int fd = open("/dev/dri/card0", O_RDWR, 0);
 
   r800_state state(fd, false);
   compute_shader sh(&state, "first_cs.bin");
