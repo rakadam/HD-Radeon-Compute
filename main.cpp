@@ -51,17 +51,20 @@ int main()
   char* buf;
   assert(drmAvailable());
 
-  int fd = open("/dev/dri/card0", O_RDWR, 0);
+  int fd = open("/dev/dri/card1", O_RDWR, 0);
 
   r800_state state(fd, false);
+  state.soft_reset();
+  state.set_default_state();
+  
   compute_shader sh(&state, "first_cs.bin");
   radeon_bo* buffer = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   radeon_bo_map(buffer, 1);
   uint32_t *ptr = (uint32_t*)buffer->ptr;
 
-  for (int i = 0; i < 256; i++)
+  for (int i = 0; i < 1024*2; i++)
   {
-    ptr[i] = 0xF;
+    ptr[i] = 0;
   } 
   
   radeon_bo_unmap(buffer);
@@ -80,14 +83,18 @@ int main()
 
 
   {
-    state.set_rat(2, buffer, 0, 1024);
+    state.set_rat(2, buffer, 0, 1024*8);
     state.set_gds(0, 100);
     state.setup_const_cache(0, buffer2, 0, 16*1024);
     state.setup_const_cache(1, buffer2, 0, 16*1024);
     state.execute_shader(&sh);
+    cout << "start kernel" << endl;
     state.flush_cs();
   }
-
+  
+  radeon_bo_wait(buffer);
+  
+//   radeon_bo_wait(buffer);
 
   while (radeon_bo_is_busy(buffer, &w))
   {
@@ -100,27 +107,31 @@ int main()
 
   ptr = (uint32_t*)buffer->ptr;
 
-  for (int i = 0; i < 256; i++)
+  for (int i = 0; i < 64; i++)
   {
     printf("%X ", ptr[i]);
+    if (i%4 == 3)
+    {
+      printf("\n");
+    }
   }
 
   radeon_bo_unmap(buffer);
 
   cout << endl;
 
-  radeon_bo_map(buffer2, 0);
-
-  ptr = (uint32_t*)buffer2->ptr;
-
-  for (int i = 0; i < 256; i++)
-  {
-    printf("%X ", ptr[i]);
-  }
-
-  radeon_bo_unmap(buffer2);
-
-  cout << endl;
+//   radeon_bo_map(buffer2, 0);
+// 
+//   ptr = (uint32_t*)buffer2->ptr;
+// 
+//   for (int i = 0; i < 256; i++)
+//   {
+//     printf("%X ", ptr[i]);
+//   }
+// 
+//   radeon_bo_unmap(buffer2);
+// 
+//   cout << endl;
 
 
   radeon_bo_unref(buffer);

@@ -44,6 +44,11 @@
 #include "dummy_ps_ec.h"
 
 #define SPI_COMPUTE_INPUT_CNTL 0x000286E8
+//bit masks:
+#define TID_IN_GROUP_ENA 1
+#define TGID_ENA 2
+#define DISABLE_INDEX_PACK 4
+
 #define SQ_LDS_RESOURCE_MGMT 0x8e2c
 #define NUM_LS_LDS_shift 16
 
@@ -516,6 +521,14 @@ void r800_state::set_default_state()
   {
     set_rat_defaults(i);
   }
+  
+  loop_const default_loop;
+  
+  default_loop.count = 1;
+  default_loop.init = 0;
+  default_loop.inc = 1;
+  
+  set_loop_consts({default_loop});
 }
 
 void r800_state::set_spi_defaults()
@@ -533,7 +546,8 @@ void r800_state::set_spi_defaults()
   cs[SPI_VS_OUT_ID_0] = 0;
   cs[SPI_INTERP_CONTROL_0] = 0;
   cs[SPI_PS_IN_CONTROL_0] = {LINEAR_GRADIENT_ENA_bit, 0};
-  cs[SPI_COMPUTE_INPUT_CNTL] = 0;
+  
+  cs[SPI_COMPUTE_INPUT_CNTL] = TID_IN_GROUP_ENA | TGID_ENA | DISABLE_INDEX_PACK;
 }
 
 void r800_state::set_pa_defaults()
@@ -725,29 +739,54 @@ void r800_state::set_tmp_ring(radeon_bo* bo, int offset, int size)
   cs[SQ_LSTMP_RING_SIZE] = size;
 }
 
+void r800_state::set_loop_consts(const std::vector<loop_const>& v)
+{
+  assert(v.size() <= SQ_LOOP_CONST_cs_num);
+  
+  for (int i = 0; i < int(v.size()); i++)
+  {
+    cs[SQ_LOOP_CONST + SQ_LOOP_CONST_cs*4 + i*4] = (v[i].count << SQ_LOOP_CONST_0__COUNT_shift) | (v[i].init << INIT_shift) | (v[i].inc << INC_shift);
+  }
+}
+
 void r800_state::select_se(int se_index, bool broadcast_writes)
 {
   cs[GRBM_GFX_INDEX] = INSTANCE_INDEX(0) | SE_INDEX(se_index) | INSTANCE_BROADCAST_WRITES | (broadcast_writes ? SE_BROADCAST_WRITES : 0);
 }
 
-void r800_state::direct_dispatch(int groupnum, int local_size)
+void r800_state::direct_dispatch(std::vector<int> group_size, std::vector<int> local_size)
 {
+  assert(group_size.size() < 4);
+  assert(local_size.size() < 4);
+  
   cs[VGT_PRIMITIVE_TYPE] = DI_PT_POINTLIST;
   
   cs[VGT_COMPUTE_START_X] = 0;
   cs[VGT_COMPUTE_START_Y] = 0;
   cs[VGT_COMPUTE_START_Z] = 0;
   
-  cs[SPI_COMPUTE_NUM_THREAD_X] = local_size;
-  cs[SPI_COMPUTE_NUM_THREAD_Y] = 1;
-  cs[SPI_COMPUTE_NUM_THREAD_Z] = 1;
+  cs[SPI_COMPUTE_NUM_THREAD_X] = local_size.size() > 0 ? local_size[0] : 1;
+  cs[SPI_COMPUTE_NUM_THREAD_Y] = local_size.size() > 1 ? local_size[1] : 1;
+  cs[SPI_COMPUTE_NUM_THREAD_Z] = local_size.size() > 2 ? local_size[2] : 1;
  
-  cs[VGT_NUM_INDICES] = local_size;
+  int num = 1;
   
-  cs[VGT_COMPUTE_THREAD_GROUP_SIZE] = local_size;
+  for (int i = 0; i < int(local_size.size()); i++)
+  {
+    num *= local_size[i];
+  }
+  
+  cs[VGT_NUM_INDICES] = num;
+  
+  cs[VGT_COMPUTE_THREAD_GROUP_SIZE] = num;
   
   cs.packet3(PACKET3_DISPATCH_DIRECT,
-	     { groupnum, 1, 1, 1}
+	     {
+           group_size.size() > 0 ? group_size[0] : 1,
+           group_size.size() > 1 ? group_size[1] : 1,
+           group_size.size() > 2 ? group_size[2] : 1,
+           1
+         }
   );
 }
 
@@ -873,6 +912,30 @@ void r800_state::set_dummy_render_target()
   cs[CB_BLEND0_CONTROL] = 0;
 }
 
+void r800_state::soft_reset()
+{
+//   radeon_bo* dummy_bo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+//   radeon_bo_map(dummy_bo, 1);
+//   int* dummy = (int*)dummy_bo->ptr;
+//   dummy[0] = 0;
+//   dummy[1] = 0;
+//   dummy[2] = 0;
+//   radeon_bo_unmap(dummy_bo);
+//   cs.add_persistent_bo(dummy_bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
+//   cs.space_check();
+//   cs.cs_erase();
+//   
+//   cs.packet3(IT_WAIT_REG_MEM, {IT_WAIT_MEM | IT_WAIT_EQ, IT_WAIT_ADDR(0), 0, 1, 0xF, 15});
+//   cs.reloc(dummy_bo, 0, RADEON_GEM_DOMAIN_VRAM);
+// //   cs[WAIT_UNTIL] = WAIT_3D_IDLE_bit;
+// //   cs.packet3(IT_EVENT_WRITE, {})
+//   cs.cs_emit();
+//   cs.cs_erase();
+//   std::cout << "wait for bo" << std::endl;
+//   radeon_bo_wait(dummy_bo);
+//   std::cout << "waited" << std::endl;
+}
+
 void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
 {
   int offset;
@@ -953,7 +1016,6 @@ void r800_state::set_rat_defaults(int id)
 
 void r800_state::flush_cs()
 {
-  //should unmap and unref bo-s first?
   cs.cs_emit();
   cs.cs_erase();
 }
@@ -1074,11 +1136,11 @@ void r800_state::execute_shader(compute_shader* sh)
   prepare_compute_shader(sh);
   
 //   for (int i = 0; i < SQ_LOOP_CONST_cs_num*4; i++)
-  {
-    cs[SQ_LOOP_CONST + SQ_LOOP_CONST_cs*4 /*+ i*/] = (1 << SQ_LOOP_CONST_0__COUNT_shift) | (0 << INIT_shift) | (1 << INC_shift);
-  }
+//   {
+//     cs[SQ_LOOP_CONST + SQ_LOOP_CONST_cs*4 /*+ i*/] = (1 << SQ_LOOP_CONST_0__COUNT_shift) | (0 << INIT_shift) | (1 << INC_shift);
+//   }
   
-  direct_dispatch(1, 128);
+  direct_dispatch({2, 2}, {2, 2});
   
 //   setup_const_cache(0, dummy_bo, 256, 0);
 

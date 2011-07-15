@@ -287,6 +287,13 @@ typedef struct {
     bool32                      disable_cube_wrap;
 } tex_sampler_t;
 
+struct loop_const
+{
+  int count;
+  int init;
+  int inc;
+};
+
 class r800_state
 {
   int fd;
@@ -330,8 +337,9 @@ class r800_state
     void set_gds(uint32_t addr, uint32_t size);
     void set_export(radeon_bo* bo, int offset, int size);
     void set_tmp_ring(radeon_bo* bo, int offset, int size);    
+    void set_loop_consts(const std::vector<loop_const>&);
     void select_se(int se_index, bool broadcast_writed);
-    void direct_dispatch(int groupnum, int local_size);
+    void direct_dispatch(std::vector<int> group_size, std::vector<int> local_size);
     
     void set_draw_auto(int num_indices);
     void set_dummy_render_target();
@@ -340,7 +348,9 @@ class r800_state
     void flush_cs();
     void upload_dummy_ps();
     void set_dummy_scissors();
-   
+    
+    void soft_reset();
+    
     void set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc_addr, struct radeon_bo *bo, uint32_t rdomains, uint32_t wdomain);
     void set_vtx_resource(vtx_resource_t *res, uint32_t domain);
 

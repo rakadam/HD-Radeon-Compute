@@ -294,6 +294,7 @@ void radeon_cmd_stream::cs_emit()
 void radeon_cmd_stream::cs_erase()
 {
   queue.clear();
+  pers_bos.clear();
   reloc_num = 0;
 }
 
