@@ -13,44 +13,51 @@ ALU: BARRIER;
         MULLO_INT:
                 SRC0_SEL.GPR(0) SRC0_CHAN.CHAN_X LAST;
                 SRC1_SEL.ALU_SRC_LITERAL SRC1_CHAN.CHAN_X;
-                WRITE_MASK DST_GPR(5) DST_CHAN.CHAN_X;
+                WRITE_MASK DST_GPR(4) DST_CHAN.CHAN_X;
         0x00000004;
         0x00000000;
                 
         MULLO_INT:
                 SRC0_SEL.GPR(0) SRC0_CHAN.CHAN_Y LAST;
                 SRC1_SEL.ALU_SRC_LITERAL SRC1_CHAN.CHAN_X;
-                WRITE_MASK DST_GPR(5) DST_CHAN.CHAN_Y;
+                WRITE_MASK DST_GPR(4) DST_CHAN.CHAN_Y;
         0x00000008;
         0x00000000;
         
         MULLO_INT:
                 SRC0_SEL.GPR(1) SRC0_CHAN.CHAN_X LAST;
                 SRC1_SEL.ALU_SRC_LITERAL SRC1_CHAN.CHAN_X;
-                WRITE_MASK DST_GPR(5) DST_CHAN.CHAN_Z;
+                WRITE_MASK DST_GPR(4) DST_CHAN.CHAN_Z;
         0x00000010;
         0x00000000;
         
         MULLO_INT:
                 SRC0_SEL.GPR(1) SRC0_CHAN.CHAN_Y LAST;
                 SRC1_SEL.ALU_SRC_LITERAL SRC1_CHAN.CHAN_X;
-                WRITE_MASK DST_GPR(5) DST_CHAN.CHAN_W;
+                WRITE_MASK DST_GPR(4) DST_CHAN.CHAN_W;
         0x00000020;
         0x00000000;
         
         ADD_INT:
-            SRC0_SEL.GPR(5) SRC0_CHAN.CHAN_X LAST;
-            SRC1_SEL.GPR(5) SRC0_CHAN.CHAN_Y;
-            WRITE_MASK DST_GPR(5) DST_CHAN.CHAN_X;
-            
+            SRC0_SEL.GPR(4) SRC0_CHAN.CHAN_X LAST;
+            SRC1_SEL.GPR(4) SRC1_CHAN.CHAN_Y;
+            DST_CHAN.CHAN_X;
+//             WRITE_MASK DST_GPR(5) DST_CHAN.CHAN_X;
+
         ADD_INT:
-            SRC0_SEL.GPR(5) SRC0_CHAN.CHAN_X LAST;
-            SRC1_SEL.GPR(5) SRC0_CHAN.CHAN_Z;
-            WRITE_MASK DST_GPR(5) DST_CHAN.CHAN_X;
-            
+            SRC0_SEL.ALU_SRC_PV SRC0_CHAN.CHAN_X LAST;
+            SRC1_SEL.GPR(4) SRC1_CHAN.CHAN_Z;
+            DST_CHAN.CHAN_X;
+//             WRITE_MASK DST_GPR(5) DST_CHAN.CHAN_X;
+
+
+/*        MOV:
+            SRC0_SEL.ALU_SRC_PV SRC0_CHAN.CHAN_X LAST;
+            WRITE_MASK DST_GPR(3) DST_CHAN.CHAN_X;*/
+//             
         ADD_INT:
-            SRC0_SEL.GPR(5) SRC0_CHAN.CHAN_X LAST;
-            SRC1_SEL.GPR(5) SRC0_CHAN.CHAN_W;
+            SRC0_SEL.ALU_SRC_PV SRC0_CHAN.CHAN_X LAST;
+            SRC1_SEL.GPR(4) SRC1_CHAN.CHAN_W;
             WRITE_MASK DST_GPR(5) DST_CHAN.CHAN_X;
 
         MOV:

@@ -64,7 +64,7 @@ int main()
 
   for (int i = 0; i < 1024*2; i++)
   {
-    ptr[i] = 0;
+    ptr[i] = 0xF;
   } 
   
   radeon_bo_unmap(buffer);
