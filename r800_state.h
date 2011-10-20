@@ -199,17 +199,15 @@ typedef struct {
 /* Vertex buffer / vtx resource */
 typedef struct {
     int id;
-    uint32_t offset;
-    uint64_t vb_addr;
-    uint32_t vtx_num_entries;
-    uint32_t vtx_size_dw;
-    int clamp_x;
+    uint64_t vb_offset;
+    uint32_t size_in_dw;
+    uint32_t stride_in_dw;
+    bool clamp_x;
     int format;
     int num_format_all;
-    int format_comp_all;
-    int srf_mode_all;
+    bool format_comp_all;
+    bool srf_mode_all;
     int endian;
-    int mem_req_size;
     int dst_sel_x;
     int dst_sel_y;
     int dst_sel_z;

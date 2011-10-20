@@ -852,21 +852,29 @@ void r800_state::set_vtx_resource(vtx_resource_t *res, uint32_t domain)
 
     uint32_t sq_vtx_constant_word2, sq_vtx_constant_word3, sq_vtx_constant_word4;
 
-    sq_vtx_constant_word2 = ((((res->vb_addr) >> 32) & BASE_ADDRESS_HI_mask) |
-			     ((res->vtx_size_dw << 2) << SQ_VTX_CONSTANT_WORD2_0__STRIDE_shift) |
+    sq_vtx_constant_word2 = ((((res->vb_offset) >> 32) & BASE_ADDRESS_HI_mask) |
+			     ((res->stride_in_dw << 2) << SQ_VTX_CONSTANT_WORD2_0__STRIDE_shift) |
 			     (res->format << SQ_VTX_CONSTANT_WORD2_0__DATA_FORMAT_shift) |
 			     (res->num_format_all << SQ_VTX_CONSTANT_WORD2_0__NUM_FORMAT_ALL_shift) |
 			     (res->endian << SQ_VTX_CONSTANT_WORD2_0__ENDIAN_SWAP_shift));
+           
     if (res->clamp_x)
+    {
 	    sq_vtx_constant_word2 |= SQ_VTX_CONSTANT_WORD2_0__CLAMP_X_bit;
-
+    }
+    
     if (res->format_comp_all)
+    {
 	    sq_vtx_constant_word2 |= SQ_VTX_CONSTANT_WORD2_0__FORMAT_COMP_ALL_bit;
-
+    }
+    
     if (res->srf_mode_all)
+    {
 	    sq_vtx_constant_word2 |= SQ_VTX_CONSTANT_WORD2_0__SRF_MODE_ALL_bit;
-
-    sq_vtx_constant_word3 = ((res->dst_sel_x << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_X_shift) |
+    }
+    
+    sq_vtx_constant_word3 = 
+           ((res->dst_sel_x << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_X_shift) |
 			     (res->dst_sel_y << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_Y_shift) |
 			     (res->dst_sel_z << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_Z_shift) |
 			     (res->dst_sel_w << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_W_shift));
@@ -879,11 +887,11 @@ void r800_state::set_vtx_resource(vtx_resource_t *res, uint32_t domain)
     /* XXX ??? */
     sq_vtx_constant_word4 = 0;
 
-    set_surface_sync(VC_ACTION_ENA_bit,
-		    res->offset, 0,
+    set_surface_sync(VC_ACTION_ENA_bit | TC_ACTION_ENA_bit,
+		    res->size_in_dw*4, res->vb_offset,
 		    res->bo,
 		    domain, 0);
-
+        
 //     BEGIN_BATCH(10 + 2);
 //     PACK0(SQ_FETCH_RESOURCE + res->id * SQ_FETCH_RESOURCE_offset, 8);
 //     E32(res->vb_addr & 0xffffffff);				// 0: BASE_ADDRESS
@@ -898,14 +906,14 @@ void r800_state::set_vtx_resource(vtx_resource_t *res, uint32_t domain)
 //     END_BATCH();
 
   cs[SQ_FETCH_RESOURCE + res->id * SQ_FETCH_RESOURCE_offset] = {
-      uint32_t(res->vb_addr & 0xffffffff),
-      (res->vtx_num_entries << 2) - 1,
+      uint32_t((res->vb_offset) & 0xffffffff),
+      (res->size_in_dw << 2) - 1,
       sq_vtx_constant_word2,
       sq_vtx_constant_word3,
       sq_vtx_constant_word4,
       0,
       0,
-      SQ_TEX_VTX_VALID_BUFFER << SQ_VTX_CONSTANT_WORD7_0__TYPE_shift
+      SQ_TEX_VTX_VALID_BUFFER << SQ_VTX_CONSTANT_WORD7_0__TYPE_shift,
   };
   
   cs.reloc(res->bo, domain, 0);

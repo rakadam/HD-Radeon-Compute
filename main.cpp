@@ -73,9 +73,9 @@ int main()
   radeon_bo_map(buffer2, 1);
   ptr = (uint32_t*)buffer2->ptr;
 
-  for (int i = 0; i < 256; i++)
+  for (int i = 0; i < 1024; i++)
   {
-    ptr[i] = 0x2;
+    ptr[i] = i;
   } 
   
   radeon_bo_unmap(buffer2);
@@ -86,15 +86,21 @@ int main()
     
     memset(&vtxr, 0, sizeof(vtxr));
     
-    vtxr.id = SQ_FETCH_RESOURCE_vs;
-    vtxr.vtx_size_dw = 4;
-    vtxr.vtx_num_entries = 1;
-    vtxr.vb_addr = 0;
+    vtxr.id = SQ_FETCH_RESOURCE_cs; //SQ_FETCH_RESOURCE_vs;
+    vtxr.stride_in_dw = 1;
+    vtxr.size_in_dw = 16;
+    vtxr.vb_offset = 0;
     vtxr.bo = buffer2;
     vtxr.dst_sel_x       = SQ_SEL_X;
     vtxr.dst_sel_y       = SQ_SEL_Y;
     vtxr.dst_sel_z       = SQ_SEL_Z;
     vtxr.dst_sel_w       = SQ_SEL_W;
+    vtxr.endian = SQ_ENDIAN_NONE;
+    vtxr.num_format_all = SQ_NUM_FORMAT_INT;
+    vtxr.format = FMT_32_32_32_32;
+//     vtxr.uncached = true;
+//     vtxr.format_comp_all = true;
+    
     state.set_vtx_resource(&vtxr, RADEON_GEM_DOMAIN_VRAM);
   }
   
