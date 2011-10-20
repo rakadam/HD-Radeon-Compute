@@ -815,13 +815,12 @@ void r800_state::direct_dispatch(std::vector<int> block_num, std::vector<int> lo
   cs[VGT_COMPUTE_THREAD_GROUP_SIZE] = group_size;
   
   cs.packet3(PACKET3_DISPATCH_DIRECT,
-	     {
-           block_num.size() > 0 ? block_num[0] : 1,
-           block_num.size() > 1 ? block_num[1] : 1,
-           block_num.size() > 2 ? block_num[2] : 1,
-           1 //COMPUTE_SHADER_EN
-         }
-  );
+    {
+      block_num.size() > 0 ? block_num[0] : 1,
+      block_num.size() > 1 ? block_num[1] : 1,
+      block_num.size() > 2 ? block_num[2] : 1,
+      1 //COMPUTE_SHADER_EN
+    });
 }
 
 void r800_state::indirect_dispatch(radeon_bo* dims, int offset, std::vector<int> local_size)
