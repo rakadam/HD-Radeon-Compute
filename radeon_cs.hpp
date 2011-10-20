@@ -100,7 +100,7 @@ public:
   void cs_emit();
   void cs_erase();
   void add_persistent_bo(struct radeon_bo *bo, uint32_t read_domain, uint32_t write_domain);
-  void set_limit(uint32_t domain, uint32_t limit);
+  void set_limit(uint32_t domain, uint64_t limit);
   ~radeon_cmd_stream();
 };
 

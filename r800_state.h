@@ -298,6 +298,7 @@ class r800_state
 {
   int fd;
   bool exclusive;
+  bool has_master;
   struct radeon_bo_manager * bom;
   radeon_cmd_stream cs;
   
@@ -310,6 +311,7 @@ class r800_state
   
   public:
     r800_state(int fd, bool exclusive = true);
+    void init_gpu();
     ~r800_state();
     
     struct radeon_bo *bo_open(uint32_t size,
@@ -354,9 +356,9 @@ class r800_state
     void set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc_addr, struct radeon_bo *bo, uint32_t rdomains, uint32_t wdomain);
     void set_vtx_resource(vtx_resource_t *res, uint32_t domain);
 
-    void setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset); //for VS only for now, later CS
+    void setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset);
     
-    void prepare_compute_shader(compute_shader* sh); //A VS for now.. and a dummy PS
+    void prepare_compute_shader(compute_shader* sh); 
     
     void execute_shader(compute_shader* sh);
 };
