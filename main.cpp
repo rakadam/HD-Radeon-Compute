@@ -62,7 +62,7 @@ int main()
   
   uint32_t *ptr = (uint32_t*)buffer->ptr;
 
-  for (int i = 0; i < 1024*2; i++)
+  for (int i = 0; i < 1024*256; i++)
   {
     ptr[i] = 0xF;
   } 
@@ -114,7 +114,8 @@ int main()
     state.set_tmp_ring(NULL, 0, 0);
     state.set_lds(0, 0, 0);
     state.load_shader(&sh);
-    state.direct_dispatch({1, 1}, {4, 4});
+//    state.direct_dispatch({4, 8}, {8, 8});
+    state.direct_dispatch({4, 8}, {8, 8});
 
 //     state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 1024*1024, 0, buffer, /*RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); 
 
@@ -139,13 +140,9 @@ int main()
 
   ptr = (uint32_t*)buffer->ptr;
 
-  for (int i = 0; i < 16; i++)
+  for (int i = 0; i < 1024*8; i+=4*64)
   {
-    printf("%X ", ptr[i]);
-    if (i%4 == 3)
-    {
-      printf("\n");
-    }
+    printf("%8i %8i %8i %8i\n", ptr[i], ptr[i+1], ptr[i+2], ptr[i+3]);
   }
 
   radeon_bo_unmap(buffer);
