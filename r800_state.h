@@ -340,6 +340,8 @@ class r800_state
     void set_loop_consts(const std::vector<loop_const>&);
     void select_se(int se_index, bool broadcast_writed);
     void direct_dispatch(std::vector<int> group_size, std::vector<int> local_size);
+    void indirect_dispatch(radeon_bo* dims, int buf_offset, std::vector<int> local_size);
+    void set_kms_compute_mode(bool compute_mode_flag);
     
     void set_draw_auto(int num_indices);
     void set_dummy_render_target();
@@ -358,7 +360,7 @@ class r800_state
     
     void prepare_compute_shader(compute_shader* sh); 
     
-    void execute_shader(compute_shader* sh);
+    void load_shader(compute_shader* sh);
 };
 
 

@@ -112,6 +112,7 @@ r800_state::r800_state(int fd, bool exclusive) : fd(fd), cs(fd), exclusive(exclu
   
   if (exclusive)
   {
+    set_kms_compute_mode(true);
     soft_reset();
   }
   else
@@ -169,16 +170,22 @@ void r800_state::init_gpu()
   cs.set_limit(RADEON_GEM_DOMAIN_GTT, mminfo.gart_size);
   cs.set_limit(RADEON_GEM_DOMAIN_VRAM, mminfo.vram_size);
 
-  set_default_state();  
+  set_default_state();
 }
 
 r800_state::~r800_state()
 {
   radeon_bo_manager_gem_dtor(bom);
+  bom = NULL;
+  
   if (exclusive)
   {
+    drmCommandNone(fd, DRM_RADEON_CP_RESET);
+    set_kms_compute_mode(false);
     drop_master();
   }
+  
+  drmClose(fd);
 }
 
 struct radeon_bo* r800_state::bo_open(uint32_t size,
@@ -812,9 +819,56 @@ void r800_state::direct_dispatch(std::vector<int> block_num, std::vector<int> lo
            block_num.size() > 0 ? block_num[0] : 1,
            block_num.size() > 1 ? block_num[1] : 1,
            block_num.size() > 2 ? block_num[2] : 1,
-           1
+           1 //COMPUTE_SHADER_EN
          }
   );
+}
+
+void r800_state::indirect_dispatch(radeon_bo* dims, int offset, std::vector<int> local_size)
+{
+  assert(false and "does not makes sense at the moment, VGT_NUM_INDICES would need group size, which would defeat the idea of indirect_dispatch");
+  
+  cs[VGT_PRIMITIVE_TYPE] = DI_PT_POINTLIST;
+  
+  cs[VGT_COMPUTE_START_X] = 0;
+  cs[VGT_COMPUTE_START_Y] = 0;
+  cs[VGT_COMPUTE_START_Z] = 0;
+  
+  cs[SPI_COMPUTE_NUM_THREAD_X] = local_size.size() > 0 ? local_size[0] : 1;
+  cs[SPI_COMPUTE_NUM_THREAD_Y] = local_size.size() > 1 ? local_size[1] : 1;
+  cs[SPI_COMPUTE_NUM_THREAD_Z] = local_size.size() > 2 ? local_size[2] : 1;
+ 
+  int group_size = 1;
+  
+  for (int i = 0; i < int(local_size.size()); i++)
+  {
+    group_size *= local_size[i];
+  }
+  
+//   cs[VGT_NUM_INDICES] = grid_size*group_size; BUG?
+  
+  cs[VGT_COMPUTE_THREAD_GROUP_SIZE] = group_size;
+  
+  cs.add_persistent_bo(dims, RADEON_GEM_DOMAIN_VRAM, 0);
+
+  cs.packet3(PACKET3_DISPATCH_INDIRECT,
+    {
+      offset,
+      1 //COMPUTE_SHADER_EN
+    });
+  
+  cs.reloc(dims, RADEON_GEM_DOMAIN_VRAM, 0);
+}
+
+void r800_state::set_kms_compute_mode(bool compute_mode_flag)
+{
+  int bb = compute_mode_flag ? 1 : 0;
+  
+  if (drmCommandWrite(fd, 0x2b, &bb, sizeof(bb)))
+  {
+    cerr << "Cannot set KMS COMPUTE MODE" << endl;
+    exit(1);
+  }
 }
 
 void r800_state::set_draw_auto(int num_indices)
@@ -827,23 +881,25 @@ void r800_state::set_draw_auto(int num_indices)
 
 void r800_state::set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc_addr, struct radeon_bo *bo, uint32_t rdomains, uint32_t wdomain)
 {
-    uint32_t cp_coher_size;
-    if (size == 0xffffffff)
-		{
-	cp_coher_size = 0xffffffff;
-		}
-    else
-		{
-	cp_coher_size = ((size + 255) >> 8);
-		}
-    uint32_t poll_interval = 10;
-    
-    cs.packet3(IT_SURFACE_SYNC, {sync_type, cp_coher_size, 0, poll_interval});
-		
-		if (size != 0xffffffff)
-		{
-			cs.reloc(bo, rdomains, wdomain);
-		}
+  uint32_t cp_coher_size;
+  
+  if (size == 0xffffffff)
+  {
+    cp_coher_size = 0xffffffff;
+  }
+  else
+  {
+    cp_coher_size = ((size + 255) >> 8);
+  }
+  
+  uint32_t poll_interval = 10;
+
+  cs.packet3(IT_SURFACE_SYNC, {sync_type, cp_coher_size, 0, poll_interval});
+
+  if (size != 0xffffffff)
+  {
+    cs.reloc(bo, rdomains, wdomain);
+  }
 }
 
 void r800_state::set_vtx_resource(vtx_resource_t *res, uint32_t domain)
@@ -1125,30 +1181,6 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
   set_surface_sync(SH_ACTION_ENA_bit,
 		  sh->alloc_size, 0,
 		  sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-		  
-//   set_surface_sync(SH_ACTION_ENA_bit,
-// 		  sizeof(dummy_ps_shader_binary), 0,
-// 		  dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
-// 
-//     cs[SQ_PGM_START_PS] = 0;
-//     cs.reloc(dummy_bo_ps, RADEON_GEM_DOMAIN_VRAM, 0);
-//     cs[SQ_PGM_RESOURCES_PS] = {
-//       (/*num_gprs*/1 | (0 << STACK_SIZE_shift)),
-//       SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
-//     };
-//     cs[SQ_PGM_START_VS] = 0;
-//     cs.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-//     cs[SQ_PGM_RESOURCES_VS] = {
-//       (sh->num_gprs | (sh->stack_size << STACK_SIZE_shift)) | PRIME_CACHE_ENABLE,
-//       SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
-//     };
-//     
-//     cs[SQ_LDS_ALLOC_PS] = sh->lds_alloc; //in 32 bit words
-//     cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_1] = (0 << PS_GGPR_BASE_shift) | (sh->global_gprs << VS_GGPR_BASE_shift);
-//     cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = 0;
-//     cs[SQ_THREAD_RESOURCE_MGMT] = (sq_conf.num_ps_threads << NUM_PS_THREADS_shift) | (sh->thread_num << NUM_VS_THREADS_shift);
-//     cs[SQ_STACK_RESOURCE_MGMT_1] = (1 << NUM_PS_STACK_ENTRIES_shift) | (sh->stack_size << NUM_VS_STACK_ENTRIES_shift);
-//     cs[SQ_PGM_EXPORTS_PS] = 2; 
 
   cs[SQ_PGM_START_LS] = 0;
   cs.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
@@ -1160,52 +1192,19 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
   
   uint32_t tt = (sh->num_gprs << NUM_GPRS_shift) | (sh->stack_size << STACK_SIZE_shift) | PRIME_CACHE_ENABLE;
   
-  
-//   printf("%.8X\n", tt);
-  
   cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_1] = 0;
   cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = (sh->global_gprs << LS_GGPR_BASE_shift) | (sh->global_gprs << CS_GGPR_BASE_shift);
   
   cs[SQ_STACK_RESOURCE_MGMT_3] = sh->stack_size << NUM_LS_STACK_ENTRIES_shift;
   cs[SQ_THREAD_RESOURCE_MGMT_2] = sh->thread_num << NUM_LS_THREADS_shift;
-  
-  set_tmp_ring(NULL, 0, 0);
-  
-  set_lds(0, 0, 0);
 }
 
-void r800_state::execute_shader(compute_shader* sh)
+void r800_state::load_shader(compute_shader* sh)
 {
   cs.add_persistent_bo(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
 
   cs.space_check();
   
-  prepare_compute_shader(sh);
-  
-//   for (int i = 0; i < SQ_LOOP_CONST_cs_num*4; i++)
-//   {
-//     cs[SQ_LOOP_CONST + SQ_LOOP_CONST_cs*4 /*+ i*/] = (1 << SQ_LOOP_CONST_0__COUNT_shift) | (0 << INIT_shift) | (1 << INC_shift);
-//   }
-  
-  direct_dispatch({2, 2}, {2, 2});
-  
-//   setup_const_cache(0, dummy_bo, 256, 0);
-
-//   vtx_resource_t vtxr;
-//   
-//   memset(&vtxr, 0, sizeof(vtxr));
-//   
-//   vtxr.id = SQ_FETCH_RESOURCE_vs;
-//   vtxr.vtx_size_dw = 4;
-//   vtxr.vtx_num_entries = 1;
-//   vtxr.vb_addr = 0;
-//   vtxr.bo = dummy_vbo;
-//   vtxr.dst_sel_x       = SQ_SEL_X;
-//   vtxr.dst_sel_y       = SQ_SEL_Y;
-//   vtxr.dst_sel_z       = SQ_SEL_Z;
-//   vtxr.dst_sel_w       = SQ_SEL_W;
-//   set_vtx_resource(&vtxr, RADEON_GEM_DOMAIN_VRAM);
-
-//   set_draw_auto(3);
+  prepare_compute_shader(sh);  
 }
 
