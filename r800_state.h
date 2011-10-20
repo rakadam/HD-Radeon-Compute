@@ -305,7 +305,7 @@ class r800_state
   
   RADEONChipFamily ChipFamily;
   
-  struct radeon_bo *dummy_bo, *dummy_bo_ps, *dummy_bo_cb, *dummy_vbo;
+  struct radeon_bo *dummy_bo_cb;
   
   public:
     r800_state(int fd, bool exclusive = true);
@@ -348,7 +348,6 @@ class r800_state
     void set_rat(int id, radeon_bo* bo, int start, int size);
     void set_rat_defaults(int id);
     void flush_cs();
-    void upload_dummy_ps();
     void set_dummy_scissors();
     
     void soft_reset();

@@ -334,9 +334,6 @@ void r800_state::sq_setup()
   
   cs[CB_BLEND0_CONTROL] = {0, 0, 0, 0, 0, 0, 0, 0};
   
-/*  cs[SQ_PGM_START_FS] = 0;
-  cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);*/
-  
   cs[SQ_PGM_RESOURCES_FS] = 0; //we won't use fetch shaders
   
   cs[SQ_LDS_ALLOC_PS] = 0;
@@ -544,6 +541,8 @@ void r800_state::set_default_state()
   set_pa_defaults();
   set_spi_defaults();
   
+  set_dummy_render_target();
+  
   for (int i = 0; i < 12; i++)
   {
     set_rat_defaults(i);
@@ -689,19 +688,10 @@ void r800_state::set_vgt_defaults()
 
 void r800_state::set_db_defaults()
 {
-//   cs[DB_Z_INFO] = 0;
-//   cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-//   
-//   cs[DB_STENCIL_INFO] = 0;
-//   cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-//   
-//   cs[DB_HTILE_DATA_BASE] = 0;
-//   cs.reloc(dummy_bo, RADEON_GEM_DOMAIN_VRAM, 0);
-  
   cs[DB_DEPTH_CONTROL] = 0;
 
   cs[DB_SHADER_CONTROL] = 0; 
-  cs[DB_RENDER_CONTROL] = STENCIL_COMPRESS_DISABLE_bit | DEPTH_COMPRESS_DISABLE_bit | COLOR_DISABLE_bit;
+  cs[DB_RENDER_CONTROL] = /*STENCIL_COMPRESS_DISABLE_bit | DEPTH_COMPRESS_DISABLE_bit |*/ COLOR_DISABLE_bit;
   cs[DB_COUNT_CONTROL] = 0;
   cs[DB_DEPTH_VIEW] = 0;
   cs[DB_RENDER_OVERRIDE] = {0, 0};
@@ -729,7 +719,7 @@ void r800_state::set_lds(int num_lds, int size, int num_waves)
 
 void r800_state::set_gds(uint32_t addr, uint32_t size)
 {
-  cs[GDS_ORDERED_WAVE_PER_SE] = 1;
+  cs[GDS_ORDERED_WAVE_PER_SE] = 1; //XXX: WTF?
   cs[GDS_ADDR_BASE] = addr;
   cs[GDS_ADDR_SIZE] = size;
 }
@@ -976,30 +966,6 @@ void r800_state::set_vtx_resource(vtx_resource_t *res, uint32_t domain)
 
 void r800_state::set_dummy_render_target()
 {
-  cs[CB_COLOR0_BASE] = 0;
-  cs.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-
-  /* Set CMASK & FMASK buffer to the offset of color buffer as
-  * we don't use those this shouldn't cause any issue and we
-  * then have a valid cmd stream
-  */
-  cs[CB_COLOR0_CMASK] = 0;
-  cs.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-
-  cs[CB_COLOR0_FMASK] = 0;
-  cs.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-
-  cs[CB_COLOR0_ATTRIB] = CB_COLOR0_ATTRIB__NON_DISP_TILING_ORDER_bit;
-  cs.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-
-  cs[CB_COLOR0_INFO] = 
-    (COLOR_8 << CB_COLOR0_INFO__FORMAT_shift) |
-    (3 << COMP_SWAP_shift) |
-    (EXPORT_4C_16BPC << SOURCE_FORMAT_shift) |
-    (BLEND_CLAMP_bit);
-    
-  cs.reloc(dummy_bo_cb, 0, RADEON_GEM_DOMAIN_VRAM);
-
   cs[CB_COLOR0_PITCH] = (16 / 8) - 1;
   cs[CB_COLOR0_SLICE] = ((16*16) / 64) - 1;
   cs[CB_COLOR0_VIEW] = 0;
@@ -1120,13 +1086,6 @@ void r800_state::flush_cs()
 {
   cs.cs_emit();
   cs.cs_erase();
-}
-
-void r800_state::upload_dummy_ps()
-{
-  assert(radeon_bo_map(dummy_bo_ps, 1) == 0);
-  memcpy(dummy_bo_ps->ptr, dummy_ps_shader_binary, sizeof(dummy_ps_shader_binary));
-  radeon_bo_unmap(dummy_bo_ps);
 }
 
 void r800_state::set_dummy_scissors()

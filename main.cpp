@@ -86,7 +86,7 @@ int main()
     
     memset(&vtxr, 0, sizeof(vtxr));
     
-    vtxr.id = SQ_FETCH_RESOURCE_cs; //SQ_FETCH_RESOURCE_vs;
+    vtxr.id = SQ_FETCH_RESOURCE_cs;
     vtxr.stride_in_dw = 1;
     vtxr.size_in_dw = 256;
     vtxr.vb_offset = 0;
