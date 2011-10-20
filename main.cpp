@@ -51,15 +51,15 @@ int main()
   char* buf;
   assert(drmAvailable());
 
-  int fd = open("/dev/dri/card1", O_RDWR, 0);
+  int fd = open("/dev/dri/card0", O_RDWR, 0);
 
   r800_state state(fd, false);
-  state.soft_reset();
   state.set_default_state();
   
   compute_shader sh(&state, "first_cs.bin");
   radeon_bo* buffer = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   radeon_bo_map(buffer, 1);
+  
   uint32_t *ptr = (uint32_t*)buffer->ptr;
 
   for (int i = 0; i < 1024*2; i++)
@@ -73,21 +73,46 @@ int main()
   radeon_bo_map(buffer2, 1);
   ptr = (uint32_t*)buffer2->ptr;
 
-  for (int i = 0; i < 256; i++)
+  for (int i = 0; i < 1024; i++)
   {
-    ptr[i] = 0x2;
+    ptr[i] = i;
   } 
   
   radeon_bo_unmap(buffer2);
   uint32_t w = RADEON_GEM_DOMAIN_VRAM;
 
-
   {
-    state.set_rat(2, buffer, 0, 1024*8);
+    vtx_resource_t vtxr;
+    
+    memset(&vtxr, 0, sizeof(vtxr));
+    
+    vtxr.id = SQ_FETCH_RESOURCE_cs; //SQ_FETCH_RESOURCE_vs;
+    vtxr.stride_in_dw = 1;
+    vtxr.size_in_dw = 16;
+    vtxr.vb_offset = 0;
+    vtxr.bo = buffer2;
+    vtxr.dst_sel_x       = SQ_SEL_X;
+    vtxr.dst_sel_y       = SQ_SEL_Y;
+    vtxr.dst_sel_z       = SQ_SEL_Z;
+    vtxr.dst_sel_w       = SQ_SEL_W;
+    vtxr.endian = SQ_ENDIAN_NONE;
+    vtxr.num_format_all = SQ_NUM_FORMAT_INT;
+    vtxr.format = FMT_32_32_32_32;
+//     vtxr.uncached = true;
+//     vtxr.format_comp_all = true;
+    
+    state.set_vtx_resource(&vtxr, RADEON_GEM_DOMAIN_VRAM);
+  }
+  
+  {
+    state.set_rat(11, buffer, 0, 1024*8);
     state.set_gds(0, 100);
-    state.setup_const_cache(0, buffer2, 0, 16*1024);
-    state.setup_const_cache(1, buffer2, 0, 16*1024);
+//     state.setup_const_cache(0, buffer2, 0, 16*1024);
+//     state.setup_const_cache(1, buffer2, 0, 16*1024);
     state.execute_shader(&sh);
+		
+		state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 1024*1024, 0, buffer, /*RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); 
+
     cout << "start kernel" << endl;
     state.flush_cs();
   }

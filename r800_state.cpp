@@ -106,7 +106,21 @@
 
 using namespace std;
 
-r800_state::r800_state(int fd, bool exclusive) : fd(fd), cs(fd), exclusive(exclusive)
+r800_state::r800_state(int fd, bool exclusive) : fd(fd), cs(fd), exclusive(exclusive), has_master(false)
+{
+  bom = NULL;
+  
+  if (exclusive)
+  {
+    soft_reset();
+  }
+  else
+  {
+    init_gpu();
+  }
+}
+
+void r800_state::init_gpu()
 {
   drmSetVersion sv;
 
@@ -117,6 +131,8 @@ r800_state::r800_state(int fd, bool exclusive) : fd(fd), cs(fd), exclusive(exclu
   
   if (exclusive)
   {
+    get_master();
+    
     int ret = drmSetInterfaceVersion(fd, &sv);
     
     if (ret != 0)
@@ -125,8 +141,6 @@ r800_state::r800_state(int fd, bool exclusive) : fd(fd), cs(fd), exclusive(exclu
       close(fd);
       exit(1);
     }
-    
-    get_master();
   }
   
   if (drmCommandWriteRead(fd, DRM_RADEON_GEM_INFO, &mminfo, sizeof(mminfo)))
@@ -138,7 +152,6 @@ r800_state::r800_state(int fd, bool exclusive) : fd(fd), cs(fd), exclusive(exclu
   
   bom = radeon_bo_manager_gem_ctor(fd);
   assert(bom);
-
   
   ChipFamily = CHIP_FAMILY_PALM; //TODO: fix it
   
@@ -152,17 +165,11 @@ r800_state::r800_state(int fd, bool exclusive) : fd(fd), cs(fd), exclusive(exclu
     (unsigned long long)mminfo.vram_size/1024/1024,
     (unsigned long long)mminfo.vram_visible/1024/1024);
 
+  cs.cs_erase();
   cs.set_limit(RADEON_GEM_DOMAIN_GTT, mminfo.gart_size);
   cs.set_limit(RADEON_GEM_DOMAIN_VRAM, mminfo.vram_size);
 
-/*  dummy_bo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
-  dummy_bo_ps = bo_open(sizeof(dummy_ps_shader_binary), 0, RADEON_GEM_DOMAIN_VRAM, 0);
-  dummy_bo_cb = bo_open(8*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
-  dummy_vbo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
-  
-  cout << "dummy_bo:" << dummy_bo_ps << " " << dummy_bo_ps->handle << endl;*/
-  
-  set_default_state();
+  set_default_state();  
 }
 
 r800_state::~r800_state()
@@ -202,23 +209,36 @@ void r800_state::get_master()
   {
     cerr << "Cannot get master" << endl;
   }
-  
-  drop_master();
+  else
+  {
+    has_master = true;
+    drop_master();
+  }
   
   ret = ioctl(fd, DRM_IOCTL_SET_MASTER, 0);
   if (ret < 0)
   {
     cerr << "Cannot get master" << endl;
-  }  
+  }
+  else
+  {
+    has_master = true;
+  }
 }
 
 void r800_state::drop_master()
 {
+  assert(has_master);
+  
   int ret = ioctl(fd, DRM_IOCTL_DROP_MASTER, 0);
   if (ret < 0)
   {
-    cerr << "Cannot drop master" << endl;
-    throw 0; //shouldn't happen!
+//     cerr << "Cannot drop master" << endl;
+//     throw 0; //shouldn't happen!
+  }
+  else
+  {
+    has_master = false;
   }
 }
 
@@ -696,7 +716,7 @@ void r800_state::set_sx_defaults()
 
 void r800_state::set_lds(int num_lds, int size, int num_waves)
 {
-  cs[SQ_LDS_RESOURCE_MGMT] = num_lds << NUM_LS_LDS_shift | 0x1000 /*pixel shader setup workaround for Xorg bug*/;
+  cs[SQ_LDS_RESOURCE_MGMT] = num_lds << NUM_LS_LDS_shift;
   cs[SQ_LDS_ALLOC] = (size << SQ_LDS_ALLOC_SIZE_SHIFT) | (num_waves << SQ_LDS_ALLOC_HS_NUM_WAVES_SHIFT);
 }
 
@@ -754,9 +774,9 @@ void r800_state::select_se(int se_index, bool broadcast_writes)
   cs[GRBM_GFX_INDEX] = INSTANCE_INDEX(0) | SE_INDEX(se_index) | INSTANCE_BROADCAST_WRITES | (broadcast_writes ? SE_BROADCAST_WRITES : 0);
 }
 
-void r800_state::direct_dispatch(std::vector<int> group_size, std::vector<int> local_size)
+void r800_state::direct_dispatch(std::vector<int> block_num, std::vector<int> local_size)
 {
-  assert(group_size.size() < 4);
+  assert(block_num.size() < 4);
   assert(local_size.size() < 4);
   
   cs[VGT_PRIMITIVE_TYPE] = DI_PT_POINTLIST;
@@ -769,22 +789,29 @@ void r800_state::direct_dispatch(std::vector<int> group_size, std::vector<int> l
   cs[SPI_COMPUTE_NUM_THREAD_Y] = local_size.size() > 1 ? local_size[1] : 1;
   cs[SPI_COMPUTE_NUM_THREAD_Z] = local_size.size() > 2 ? local_size[2] : 1;
  
-  int num = 1;
+  int group_size = 1;
+  
+  int grid_size = 1;
   
   for (int i = 0; i < int(local_size.size()); i++)
   {
-    num *= local_size[i];
+    group_size *= local_size[i];
   }
   
-  cs[VGT_NUM_INDICES] = num;
+  for (int i = 0; i < int(block_num.size()); i++)
+  {
+    grid_size *= block_num[i];
+  }
   
-  cs[VGT_COMPUTE_THREAD_GROUP_SIZE] = num;
+  cs[VGT_NUM_INDICES] = grid_size*group_size;
+  
+  cs[VGT_COMPUTE_THREAD_GROUP_SIZE] = group_size;
   
   cs.packet3(PACKET3_DISPATCH_DIRECT,
 	     {
-           group_size.size() > 0 ? group_size[0] : 1,
-           group_size.size() > 1 ? group_size[1] : 1,
-           group_size.size() > 2 ? group_size[2] : 1,
+           block_num.size() > 0 ? block_num[0] : 1,
+           block_num.size() > 1 ? block_num[1] : 1,
+           block_num.size() > 2 ? block_num[2] : 1,
            1
          }
   );
@@ -802,50 +829,69 @@ void r800_state::set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc
 {
     uint32_t cp_coher_size;
     if (size == 0xffffffff)
+		{
 	cp_coher_size = 0xffffffff;
+		}
     else
+		{
 	cp_coher_size = ((size + 255) >> 8);
-
+		}
     uint32_t poll_interval = 10;
     
-    cs.packet3(IT_SURFACE_SYNC, {sync_type, cp_coher_size, uint32_t(mc_addr >> 8), poll_interval});
-    cs.reloc(bo, rdomains, wdomain);
+    cs.packet3(IT_SURFACE_SYNC, {sync_type, cp_coher_size, 0, poll_interval});
+		
+		if (size != 0xffffffff)
+		{
+			cs.reloc(bo, rdomains, wdomain);
+		}
 }
 
 void r800_state::set_vtx_resource(vtx_resource_t *res, uint32_t domain)
 {
+    cs.add_persistent_bo(res->bo, domain, 0);
+
     uint32_t sq_vtx_constant_word2, sq_vtx_constant_word3, sq_vtx_constant_word4;
 
-    sq_vtx_constant_word2 = ((((res->vb_addr) >> 32) & BASE_ADDRESS_HI_mask) |
-			     ((res->vtx_size_dw << 2) << SQ_VTX_CONSTANT_WORD2_0__STRIDE_shift) |
+    sq_vtx_constant_word2 = ((((res->vb_offset) >> 32) & BASE_ADDRESS_HI_mask) |
+			     ((res->stride_in_dw << 2) << SQ_VTX_CONSTANT_WORD2_0__STRIDE_shift) |
 			     (res->format << SQ_VTX_CONSTANT_WORD2_0__DATA_FORMAT_shift) |
 			     (res->num_format_all << SQ_VTX_CONSTANT_WORD2_0__NUM_FORMAT_ALL_shift) |
 			     (res->endian << SQ_VTX_CONSTANT_WORD2_0__ENDIAN_SWAP_shift));
+           
     if (res->clamp_x)
+    {
 	    sq_vtx_constant_word2 |= SQ_VTX_CONSTANT_WORD2_0__CLAMP_X_bit;
-
+    }
+    
     if (res->format_comp_all)
+    {
 	    sq_vtx_constant_word2 |= SQ_VTX_CONSTANT_WORD2_0__FORMAT_COMP_ALL_bit;
-
+    }
+    
     if (res->srf_mode_all)
+    {
 	    sq_vtx_constant_word2 |= SQ_VTX_CONSTANT_WORD2_0__SRF_MODE_ALL_bit;
-
-    sq_vtx_constant_word3 = ((res->dst_sel_x << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_X_shift) |
+    }
+    
+    sq_vtx_constant_word3 = 
+           ((res->dst_sel_x << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_X_shift) |
 			     (res->dst_sel_y << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_Y_shift) |
 			     (res->dst_sel_z << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_Z_shift) |
 			     (res->dst_sel_w << SQ_VTX_CONSTANT_WORD3_0__DST_SEL_W_shift));
 
     if (res->uncached)
-	sq_vtx_constant_word3 |= SQ_VTX_CONSTANT_WORD3_0__UNCACHED_bit;
-
+    {
+      sq_vtx_constant_word3 |= SQ_VTX_CONSTANT_WORD3_0__UNCACHED_bit;
+    }
+    
     /* XXX ??? */
     sq_vtx_constant_word4 = 0;
 
-    set_surface_sync(TC_ACTION_ENA_bit,
-		    res->offset, 0,
+    set_surface_sync(VC_ACTION_ENA_bit | TC_ACTION_ENA_bit,
+		    res->size_in_dw*4, res->vb_offset,
 		    res->bo,
 		    domain, 0);
-
+        
 //     BEGIN_BATCH(10 + 2);
 //     PACK0(SQ_FETCH_RESOURCE + res->id * SQ_FETCH_RESOURCE_offset, 8);
 //     E32(res->vb_addr & 0xffffffff);				// 0: BASE_ADDRESS
@@ -860,14 +906,14 @@ void r800_state::set_vtx_resource(vtx_resource_t *res, uint32_t domain)
 //     END_BATCH();
 
   cs[SQ_FETCH_RESOURCE + res->id * SQ_FETCH_RESOURCE_offset] = {
-      uint32_t(res->vb_addr & 0xffffffff),
-      (res->vtx_num_entries << 2) - 1,
+      uint32_t((res->vb_offset) & 0xffffffff),
+      (res->size_in_dw << 2) - 1,
       sq_vtx_constant_word2,
       sq_vtx_constant_word3,
       sq_vtx_constant_word4,
       0,
       0,
-      SQ_TEX_VTX_VALID_BUFFER << SQ_VTX_CONSTANT_WORD7_0__TYPE_shift
+      SQ_TEX_VTX_VALID_BUFFER << SQ_VTX_CONSTANT_WORD7_0__TYPE_shift,
   };
   
   cs.reloc(res->bo, domain, 0);
@@ -914,26 +960,23 @@ void r800_state::set_dummy_render_target()
 
 void r800_state::soft_reset()
 {
-//   radeon_bo* dummy_bo = bo_open(1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
-//   radeon_bo_map(dummy_bo, 1);
-//   int* dummy = (int*)dummy_bo->ptr;
-//   dummy[0] = 0;
-//   dummy[1] = 0;
-//   dummy[2] = 0;
-//   radeon_bo_unmap(dummy_bo);
-//   cs.add_persistent_bo(dummy_bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
-//   cs.space_check();
-//   cs.cs_erase();
-//   
-//   cs.packet3(IT_WAIT_REG_MEM, {IT_WAIT_MEM | IT_WAIT_EQ, IT_WAIT_ADDR(0), 0, 1, 0xF, 15});
-//   cs.reloc(dummy_bo, 0, RADEON_GEM_DOMAIN_VRAM);
-// //   cs[WAIT_UNTIL] = WAIT_3D_IDLE_bit;
-// //   cs.packet3(IT_EVENT_WRITE, {})
-//   cs.cs_emit();
-//   cs.cs_erase();
-//   std::cout << "wait for bo" << std::endl;
-//   radeon_bo_wait(dummy_bo);
-//   std::cout << "waited" << std::endl;
+  assert(exclusive);
+  
+  if (bom)
+  {
+    radeon_bo_manager_gem_dtor(bom);
+    bom = NULL;
+  }
+    
+  int ret = drmCommandNone(fd, DRM_RADEON_CP_RESET);
+
+  if (ret < 0)
+  {
+    cerr << "GPU reset failed" << endl;
+    cerr << "reset ret: " << ret << endl;
+  }
+  
+  init_gpu();
 }
 
 void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
@@ -962,16 +1005,20 @@ void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
   cs[CB_COLOR0_BASE + offset] = start >> 8;
   cs.reloc(bo, rd, wd);
 
-  cs[CB_IMMED0_BASE + id*8] = start >> 8;
-  cs.reloc(bo, rd, wd);
+  if (id < 8)
+  {
+    cs[CB_IMMED0_BASE + id*8] = start >> 8;
+    cs.reloc(bo, rd, wd);
+  }
   
-  cs[CB_COLOR0_INFO + offset] = RAT_bit;
+  cs[CB_COLOR0_INFO + offset] = RAT_bit | (ARRAY_LINEAR_ALIGNED << CB_COLOR0_INFO__ARRAY_MODE_shift) | (NUMBER_UINT << NUMBER_TYPE_shift) | (COLOR_32 << CB_COLOR0_INFO__FORMAT_shift);
   cs.reloc(bo, rd, wd);
   
   cs[CB_COLOR0_ATTRIB + offset] = CB_COLOR0_ATTRIB__NON_DISP_TILING_ORDER_bit;
   cs.reloc(bo, rd, wd);
   
   cs[CB_COLOR0_DIM + offset] = size >> 2; //for RATs its a linear buffer size!
+      
       
   if (id < 8)
   {
@@ -982,7 +1029,7 @@ void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
     cs.reloc(bo, rd, wd);
   }
   
-  set_surface_sync(CB_ACTION_ENA_bit /*| CB2_DEST_BASE_ENA_bit*/ | FULL_CACHE_ENA_bit, 1024*1024, 0, bo,/* RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); //FIXME CBn_DEST_BASE_ENA_bit
+//   set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 1024*1024, 0, bo,/* RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); //FIXME CBn_DEST_BASE_ENA_bit
 }
 
 void r800_state::set_rat_defaults(int id)

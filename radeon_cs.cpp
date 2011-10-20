@@ -274,9 +274,9 @@ void radeon_cmd_stream::cs_emit()
       int err;
       if (err = radeon_cs_write_reloc((radeon_cs*)cs, queue[i].bo, queue[i].rd, queue[i].wd, 0))
       {
-	cerr << queue[i].bo << " " << queue[i].rd << " " << queue[i].wd ;
-	drmError(err, "");
-	throw runtime_error("Relocation error");
+        cerr << queue[i].bo << " " << queue[i].rd << " " << queue[i].wd ;
+        drmError(err, "");
+        throw runtime_error("Relocation error");
       }
     }
     else
@@ -306,13 +306,16 @@ void radeon_cmd_stream::add_persistent_bo(struct radeon_bo *bo,
   pers_bos.push_back(token(bo, read_domain, write_domain));
 }
 
-void radeon_cmd_stream::set_limit(uint32_t domain, uint32_t limit)
+void radeon_cmd_stream::set_limit(uint32_t domain, uint64_t limit)
 {
   radeon_cs_set_limit((radeon_cs*)cs, domain, limit);
 }
 
 radeon_cmd_stream::~radeon_cmd_stream()
 {
-  radeon_cs_destroy((radeon_cs*)cs);
-  radeon_cs_manager_gem_dtor((radeon_cs_manager*)gem);
+  if (cs)
+  {
+    radeon_cs_destroy((radeon_cs*)cs);
+    radeon_cs_manager_gem_dtor((radeon_cs_manager*)gem);
+  }
 }

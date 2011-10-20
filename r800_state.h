@@ -199,17 +199,15 @@ typedef struct {
 /* Vertex buffer / vtx resource */
 typedef struct {
     int id;
-    uint32_t offset;
-    uint64_t vb_addr;
-    uint32_t vtx_num_entries;
-    uint32_t vtx_size_dw;
-    int clamp_x;
+    uint64_t vb_offset;
+    uint32_t size_in_dw;
+    uint32_t stride_in_dw;
+    bool clamp_x;
     int format;
     int num_format_all;
-    int format_comp_all;
-    int srf_mode_all;
+    bool format_comp_all;
+    bool srf_mode_all;
     int endian;
-    int mem_req_size;
     int dst_sel_x;
     int dst_sel_y;
     int dst_sel_z;
@@ -298,6 +296,7 @@ class r800_state
 {
   int fd;
   bool exclusive;
+  bool has_master;
   struct radeon_bo_manager * bom;
   radeon_cmd_stream cs;
   
@@ -310,6 +309,7 @@ class r800_state
   
   public:
     r800_state(int fd, bool exclusive = true);
+    void init_gpu();
     ~r800_state();
     
     struct radeon_bo *bo_open(uint32_t size,
@@ -354,9 +354,9 @@ class r800_state
     void set_surface_sync(uint32_t sync_type, uint32_t size, uint64_t mc_addr, struct radeon_bo *bo, uint32_t rdomains, uint32_t wdomain);
     void set_vtx_resource(vtx_resource_t *res, uint32_t domain);
 
-    void setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset); //for VS only for now, later CS
+    void setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset);
     
-    void prepare_compute_shader(compute_shader* sh); //A VS for now.. and a dummy PS
+    void prepare_compute_shader(compute_shader* sh); 
     
     void execute_shader(compute_shader* sh);
 };
