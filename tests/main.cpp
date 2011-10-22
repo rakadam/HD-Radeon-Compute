@@ -33,54 +33,52 @@
  *    
  */
 
-#ifndef CS_IMAGE_H
-#define CS_IMAGE_H
+#include <iostream>
+#include <stdexcept>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <string.h>
+#include <assert.h>
+#include <r800_state.h>
 
-#include <cstdint>
-#include <vector>
-#include <string>
+using namespace std;
 
-struct cs_image_header
+void do_test(r800_state&);
+
+int open_drm(std::string fname)
 {
-  uint32_t magic;
-  uint32_t chksum;
-  uint32_t size; //size of the binary image, excluding the header
-  uint32_t lds_alloc;
-  uint32_t num_gprs;
-  uint32_t temp_gprs;
-  uint32_t global_gprs;
-  uint32_t stack_size; //stack size in enties
-  uint32_t thread_num; //how much wavefronts are allowed per SIMD
-  uint32_t dyn_gpr_limit;
-  uint32_t reserved[6];
-} __attribute__((packed));
+  int fd = open(fname.c_str(), O_RDWR, 0);
 
-struct r800_state;
-struct radeon_bo;
+  if (fd < 0)
+  {
+    throw runtime_error("Error, cannot open DRM device: " + fname);
+  }
+  
+  return fd;
+}
 
-struct compute_shader
+int main(int argc, char* argv[])
 {
-  compute_shader(r800_state* state, const std::vector<char>& binary);
-  compute_shader(r800_state* state, std::string fname); //open raw for now
-
-  ~compute_shader();
+  cerr << "Running test: " << argv[0] << endl;
   
-  struct radeon_bo* binary_code_bo;
+  assert(drmAvailable());
   
-  int alloc_size; //allocated bo size in bytes
-  int lds_alloc; //local memory per workgroup in 32bit words
-  int num_gprs; //number or GPRs used by the shader
-  int temp_gprs; //number of temporary GRPs
-  int global_gprs; //number of global GPRs (on a SIMD)
-  int stack_size; //size of the stack to allocate
-  int thread_num; //per SIMD
-  int dyn_gpr_limit; //WTF?
-};
+  int drm_fd;
+  
+  if (argc == 2)
+  {
+    drm_fd = open_drm(argv[1]);
+  }
+  else
+  {
+    drm_fd = open_drm("/dev/dri/card0");
+  }
+  
+  r800_state state(drm_fd, false);
+  state.set_default_state();
 
-
-// compute_shader cs_read_from_file(std::string fname);
-
-#endif
-
-
-
+  do_test(state);
+  
+}

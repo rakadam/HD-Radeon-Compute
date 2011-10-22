@@ -124,11 +124,7 @@ compute_shader::compute_shader(r800_state* state, std::string fname)
   radeon_bo_unmap(binary_code_bo);
 }
 
-// compute_shader cs_read_from_file(std::string fname)
-// {
-//   FILE *f = fopen(fname.c_str(), "r");
-//   
-//   fread()
-//   
-//   fclose(f);
-// }
+compute_shader::~compute_shader()
+{
+  radeon_bo_unref(binary_code_bo);
+}

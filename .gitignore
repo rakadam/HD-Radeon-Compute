@@ -1,3 +1,9 @@
 *~
 *.o
 nohup.out
+Makefile
+CMakeCache.txt
+CMakeFiles
+*.cmake
+test_*
+*.bin
