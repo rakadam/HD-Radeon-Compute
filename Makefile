@@ -64,6 +64,16 @@ rebuild_cache:
 rebuild_cache/fast: rebuild_cache
 .PHONY : rebuild_cache/fast
 
+# Special rule for the target test
+test:
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running tests..."
+	/usr/bin/ctest --force-new-ctest-process $(ARGS)
+.PHONY : test
+
+# Special rule for the target test
+test/fast: test
+.PHONY : test/fast
+
 # The main all target
 all: cmake_check_build_system
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/rakadam/Projects/HD-Radeon-Compute/CMakeFiles /home/rakadam/Projects/HD-Radeon-Compute/CMakeFiles/progress.marks
@@ -305,6 +315,7 @@ help:
 	@echo "... expr"
 	@echo "... r800_compute"
 	@echo "... rebuild_cache"
+	@echo "... test"
 	@echo "... test_01"
 	@echo "... test_02"
 	@echo "... test_03"

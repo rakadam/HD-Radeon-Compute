@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 2.6)
 PROJECT(r800_compute)
 SET(CMAKE_VERBOSE_MAKEFILE OFF)
 
+ENABLE_TESTING()
+
 include_directories(. /usr/include/libdrm)
 SET(CMAKE_CXX_FLAGS "-std=c++0x -O2 -g3")
 
