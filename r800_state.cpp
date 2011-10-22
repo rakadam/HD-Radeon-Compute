@@ -1136,22 +1136,22 @@ void r800_state::set_dummy_scissors()
 
 void r800_state::setup_const_cache(int cache_id, struct radeon_bo* cbo, int size, int offset)
 {
-  assert(cache_id < SQ_ALU_CONST_BUFFER_SIZE_VS_0_num);
+//   assert(cache_id < SQ_ALU_CONST_BUFFER_SIZE_VS_0_num);
 
+  assert(cache_id < 16);
+  
   set_surface_sync(SH_ACTION_ENA_bit,
 		size, offset,
 		cbo, RADEON_GEM_DOMAIN_VRAM, 0);
 		
-  cs[SQ_ALU_CONST_BUFFER_SIZE_LS_0+cache_id] = size;
+  cs[SQ_ALU_CONST_BUFFER_SIZE_LS_0+cache_id*4] = size;
 
   assert(size < SQ_ALU_CONST_BUFFER_SIZE_LS_0__DATA_mask);
   
   assert((offset & 0xFF) == 0);
-  cs[SQ_ALU_CONST_CACHE_LS_0+cache_id] = offset >> 8;
+  cs[SQ_ALU_CONST_CACHE_LS_0+cache_id*4] = offset >> 8;
   cs.reloc(cbo, RADEON_GEM_DOMAIN_VRAM, 0);
 
-  assert(cache_id < SQ_ALU_CONST_BUFFER_SIZE_LS_0_num);
-  
   cs.add_persistent_bo(cbo, RADEON_GEM_DOMAIN_VRAM, 0);
 }
 
