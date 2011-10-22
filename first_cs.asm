@@ -13,21 +13,21 @@ ALU: BARRIER;
                 SRC0_SEL.GPR(0) SRC0_CHAN.CHAN_Y LAST;
                 SRC1_SEL.ALU_SRC_LITERAL SRC1_CHAN.CHAN_X;
                 WRITE_MASK DST_GPR(4) DST_CHAN.CHAN_Y;
-        0x00000008;
+        0x00000020;
         0x00000000;
         
         MULLO_INT:
                 SRC0_SEL.GPR(1) SRC0_CHAN.CHAN_X LAST;
                 SRC1_SEL.ALU_SRC_LITERAL SRC1_CHAN.CHAN_X;
                 WRITE_MASK DST_GPR(4) DST_CHAN.CHAN_Z;
-        0x00000010;
+        0x00000100;
         0x00000000;
         
         MULLO_INT:
                 SRC0_SEL.GPR(1) SRC0_CHAN.CHAN_Y LAST;
                 SRC1_SEL.ALU_SRC_LITERAL SRC1_CHAN.CHAN_X;
                 WRITE_MASK DST_GPR(4) DST_CHAN.CHAN_W;
-        0x00000020;
+        0x00000400;
         0x00000000;
         
         ADD_INT:
@@ -91,6 +91,18 @@ ALU: BARRIER;
             WRITE_MASK DST_GPR(1) DST_CHAN.CHAN_X;
             0x0;
             0x0;
+
+         MOV:
+                 SRC0_SEL.ALU_SRC_TIME_HI SRC0_CHAN.CHAN_X LAST;
+                 WRITE_MASK DST_GPR(0) DST_CHAN.CHAN_X;
+
+         MOV:
+                 SRC0_SEL.ALU_SRC_SE_ID SRC0_CHAN.CHAN_X LAST;
+                 WRITE_MASK DST_GPR(0) DST_CHAN.CHAN_Z;
+         MOV:
+                 SRC0_SEL.ALU_SRC_SIMD_ID SRC0_CHAN.CHAN_X LAST;
+                 WRITE_MASK DST_GPR(0) DST_CHAN.CHAN_W;
+
             
 /*
 ALU: BARRIER;
@@ -141,13 +153,29 @@ ALU: BARRIER;
         COMP_MASK(15) VALID_PIXEL_MODE MARK BARRIER;
 
 WAIT_ACK: BARRIER;*/
-/*
-LOOP_START_DX10:    
+
+LOOP_START_DX10:
        ADDR(@1);
        CF_CONST(0);
        BARRIER;
+@2
+NOP: BARRIER;
+NOP: BARRIER;
 
-@2*/
+LOOP_END:
+         ADDR(@2);
+         BARRIER;
+
+@1
+NOP: BARRIER;
+
+
+ALU: BARRIER;
+         MOV:
+                 SRC0_SEL.ALU_SRC_TIME_HI SRC0_CHAN.CHAN_X LAST;
+                 WRITE_MASK DST_GPR(0) DST_CHAN.CHAN_Y;
+
+//@2
 // JUMP: ADDR(@3);
 
 /*MEM_RAT_CACHELESS:
@@ -166,12 +194,6 @@ LOOP_START_DX10:
 
 NOP: BARRIER;
 
-// @4
-// LOOP_END:
-//         ADDR(@2);
-//         BARRIER;
-
-@1
 NOP: BARRIER;
 
 /*MEM_RAT:
@@ -193,17 +215,17 @@ WAIT_ACK: BARRIER;
         RAT_ID(11) RAT_INST.EXPORT_RAT_INST_STORE_RAW TYPE(1) INDEX_GPR(6) RW_GPR(0);
         COMP_MASK(15) BARRIER MARK;*/
 
-TC:
+/*TC:
         BARRIER;
 
         FETCH:
                 FETCH_TYPE.VTX_FETCH_NO_INDEX_OFFSET BUFFER_ID(0) SRC_GPR(5) SRC_SEL_X.SEL_X MEGA_FETCH_COUNT(15);
                 DST_GPR(0) DST_SEL_X.SEL_X DST_SEL_Y.SEL_Y DST_SEL_Z.SEL_Z DST_SEL_W.SEL_W USE_CONST_FIELDS;
                 MEGA_FETCH;
-
+*/
 MEM_RAT_CACHELESS:
         RAT_ID(11) RAT_INST.EXPORT_RAT_INST_STORE_RAW TYPE(1) RW_GPR(0) INDEX_GPR(5) ELEM_SIZE(0);
-        COMP_MASK(15) BARRIER VALID_PIXEL_MODE ARRAY_SIZE(0);
+        COMP_MASK(15) BARRIER ARRAY_SIZE(0);
 
 NOP: END_OF_PROGRAM;
 

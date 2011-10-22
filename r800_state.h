@@ -305,7 +305,7 @@ class r800_state
   
   RADEONChipFamily ChipFamily;
   
-  struct radeon_bo *dummy_bo, *dummy_bo_ps, *dummy_bo_cb, *dummy_vbo;
+  struct radeon_bo *dummy_bo_cb;
   
   public:
     r800_state(int fd, bool exclusive = true);
@@ -340,13 +340,14 @@ class r800_state
     void set_loop_consts(const std::vector<loop_const>&);
     void select_se(int se_index, bool broadcast_writed);
     void direct_dispatch(std::vector<int> group_size, std::vector<int> local_size);
+    void indirect_dispatch(radeon_bo* dims, int buf_offset, std::vector<int> local_size);
+    void set_kms_compute_mode(bool compute_mode_flag);
     
     void set_draw_auto(int num_indices);
     void set_dummy_render_target();
     void set_rat(int id, radeon_bo* bo, int start, int size);
     void set_rat_defaults(int id);
     void flush_cs();
-    void upload_dummy_ps();
     void set_dummy_scissors();
     
     void soft_reset();
@@ -358,7 +359,7 @@ class r800_state
     
     void prepare_compute_shader(compute_shader* sh); 
     
-    void execute_shader(compute_shader* sh);
+    void load_shader(compute_shader* sh);
 };
 
 

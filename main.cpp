@@ -62,7 +62,7 @@ int main()
   
   uint32_t *ptr = (uint32_t*)buffer->ptr;
 
-  for (int i = 0; i < 1024*2; i++)
+  for (int i = 0; i < 1024*256; i++)
   {
     ptr[i] = 0xF;
   } 
@@ -86,9 +86,9 @@ int main()
     
     memset(&vtxr, 0, sizeof(vtxr));
     
-    vtxr.id = SQ_FETCH_RESOURCE_cs; //SQ_FETCH_RESOURCE_vs;
+    vtxr.id = SQ_FETCH_RESOURCE_cs;
     vtxr.stride_in_dw = 1;
-    vtxr.size_in_dw = 16;
+    vtxr.size_in_dw = 256;
     vtxr.vb_offset = 0;
     vtxr.bo = buffer2;
     vtxr.dst_sel_x       = SQ_SEL_X;
@@ -104,14 +104,20 @@ int main()
     state.set_vtx_resource(&vtxr, RADEON_GEM_DOMAIN_VRAM);
   }
   
+  state.set_kms_compute_mode(true);
+
   {
-    state.set_rat(11, buffer, 0, 1024*8);
+    state.set_rat(11, buffer, 0, 1024*1024);
     state.set_gds(0, 100);
 //     state.setup_const_cache(0, buffer2, 0, 16*1024);
 //     state.setup_const_cache(1, buffer2, 0, 16*1024);
-    state.execute_shader(&sh);
-		
-		state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 1024*1024, 0, buffer, /*RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); 
+    state.set_tmp_ring(NULL, 0, 0);
+    state.set_lds(0, 0, 0);
+    state.load_shader(&sh);
+//    state.direct_dispatch({4, 8}, {8, 8});
+    state.direct_dispatch({4, 8}, {8, 8});
+
+//     state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 1024*1024, 0, buffer, /*RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); 
 
     cout << "start kernel" << endl;
     state.flush_cs();
@@ -126,19 +132,17 @@ int main()
     sleep(1);
     printf(".\n");
   }
+  
+  state.set_kms_compute_mode(false);
 
   radeon_bo_map(buffer, 0);
   printf("mapped\n");
 
   ptr = (uint32_t*)buffer->ptr;
 
-  for (int i = 0; i < 64; i++)
+  for (int i = 0; i < 1024*8; i+=4*64)
   {
-    printf("%X ", ptr[i]);
-    if (i%4 == 3)
-    {
-      printf("\n");
-    }
+    printf("%8i %8i %8i %8i\n", ptr[i], ptr[i+1], ptr[i+2], ptr[i+3]);
   }
 
   radeon_bo_unmap(buffer);
@@ -161,6 +165,6 @@ int main()
 
   radeon_bo_unref(buffer);
   radeon_bo_unref(buffer2);
-  drmClose(fd);
+//   drmClose(fd); //r800_state will close it
 }
 

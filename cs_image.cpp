@@ -108,7 +108,7 @@ compute_shader::compute_shader(r800_state* state, std::string fname)
   temp_gprs = 4;
   global_gprs = 0;
   stack_size = 3;
-  thread_num = 8;
+  thread_num = 16;
   dyn_gpr_limit = 0;
   
   alloc_size = size;
