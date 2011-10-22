@@ -5,3 +5,5 @@ ADD_CUSTOM_COMMAND(OUTPUT shader.bin
 
 ADD_EXECUTABLE(test_05 ${test_files})
 TARGET_LINK_LIBRARIES(test_05 r800_compute drm_radeon drm)
+
+add_test(test_05 test_05)

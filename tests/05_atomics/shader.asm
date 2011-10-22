@@ -32,17 +32,6 @@
  *    
  *    
  */
-
-/*ALU:
-  BARRIER;
-  
-  MULLO_INT:
-    SRC0_SEL.GPR(0) SRC0_CHAN.CHAN_X ///< local_ID.x
-    SRC1_SEL.ALU_SRC_LITERAL SRC1_CHAN.CHAN_X 
-    LAST;
-    WRITE_MASK DST_GPR(0) DST_CHAN.CHAN_X;
-    0x4;
-    0x0;*/
   
 TC:
   BARRIER;
