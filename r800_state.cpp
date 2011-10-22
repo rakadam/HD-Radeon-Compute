@@ -104,6 +104,22 @@
 #define PACKET3_DISPATCH_DIRECT                         0x15
 #define PACKET3_DISPATCH_INDIRECT                       0x16
 
+#define   S_028838_PS_GPRS(x)                          (((x) & 0x1F) << 0)                                                                                                                                     
+#define   S_028838_VS_GPRS(x)                          (((x) & 0x1F) << 5)                                                                                                                                     
+#define   S_028838_GS_GPRS(x)                          (((x) & 0x1F) << 10)                                                                                                                                    
+#define   S_028838_ES_GPRS(x)                          (((x) & 0x1F) << 15)                                                                                                                                    
+#define   S_028838_HS_GPRS(x)                          (((x) & 0x1F) << 20)                                                                                                                                    
+#define   S_028838_LS_GPRS(x)                          (((x) & 0x1F) << 25)  
+
+#define SPI_THREAD_GROUPING 0x286c8
+#define CS_GROUPING(v) (v << 29)
+
+
+#define SQ_STATIC_THREAD_MGMT1 0x8E20 
+#define SQ_STATIC_THREAD_MGMT2 0x8E24
+#define SQ_STATIC_THREAD_MGMT3 0x8E28
+#define CS_SIMD_EN(a) (a << 16)
+
 using namespace std;
 
 r800_state::r800_state(int fd, bool exclusive) : fd(fd), cs(fd), exclusive(exclusive), has_master(false)
@@ -154,7 +170,7 @@ void r800_state::init_gpu()
   bom = radeon_bo_manager_gem_ctor(fd);
   assert(bom);
   
-  ChipFamily = CHIP_FAMILY_PALM; //TODO: fix it
+  ChipFamily = CHIP_FAMILY_CYPRESS; //TODO: fix it
   
   printf("mem size init: gart size :%llx vram size: s:%llx visible:%llx\n",
     (unsigned long long)mminfo.gart_size,
@@ -301,8 +317,8 @@ void r800_state::sq_setup()
 			      (sq_conf.num_ls_stack_entries << NUM_LS_STACK_ENTRIES_shift));
 
     
-  cs[SQ_DYN_GPR_CNTL_PS_FLUSH_REQ] = 0;
-    
+  cs[SQ_DYN_GPR_CNTL_PS_FLUSH_REQ] = (1 << 8);
+  
   cs[SQ_CONFIG] = {
     sq_config,
     sq_gpr_resource_mgmt_1,
@@ -337,9 +353,13 @@ void r800_state::sq_setup()
   cs[SQ_PGM_RESOURCES_FS] = 0; //we won't use fetch shaders
   
   cs[SQ_LDS_ALLOC_PS] = 0;
-  cs[SQ_DYN_GPR_RESOURCE_LIMIT_1] = 0;
-
-  
+  cs[SQ_DYN_GPR_RESOURCE_LIMIT_1] = 
+    S_028838_PS_GPRS(0x1e) |
+    S_028838_VS_GPRS(0x1e) |
+    S_028838_GS_GPRS(0x1e) |
+    S_028838_ES_GPRS(0x1e) |
+    S_028838_HS_GPRS(0x1e) |
+    S_028838_LS_GPRS(0x1e);
 }
 
 void r800_state::set_default_sq()
@@ -655,7 +675,7 @@ void r800_state::set_vgt_defaults()
   cs[VGT_STRMOUT_BUFFER_CONFIG] = 0;
   cs[VGT_REUSE_OFF] = 0;
   cs[VGT_VTX_CNT_EN] = 0;
-
+  
   cs[VGT_MAX_VTX_INDX] = 0xFFFFFFFF;
   cs[VGT_MIN_VTX_INDX] = 0;
   cs[VGT_INDX_OFFSET] = 0;
@@ -749,8 +769,9 @@ void r800_state::set_tmp_ring(radeon_bo* bo, int offset, int size)
 {
   if (size)
   {
+    cs.add_persistent_bo(bo, RADEON_GEM_DOMAIN_VRAM, 0);
     cs[SQ_LSTMP_RING_BASE] = offset;
-    cs.reloc(bo, RADEON_GEM_DOMAIN_VRAM, RADEON_GEM_DOMAIN_VRAM);
+    cs.reloc(bo, RADEON_GEM_DOMAIN_VRAM, 0);
   }
   
   cs[SQ_LSTMP_RING_SIZE] = size;
@@ -777,7 +798,7 @@ void r800_state::direct_dispatch(std::vector<int> block_num, std::vector<int> lo
   assert(local_size.size() < 4);
   
   cs[VGT_PRIMITIVE_TYPE] = DI_PT_POINTLIST;
-  
+
   cs[VGT_COMPUTE_START_X] = 0;
   cs[VGT_COMPUTE_START_Y] = 0;
   cs[VGT_COMPUTE_START_Z] = 0;
@@ -800,7 +821,7 @@ void r800_state::direct_dispatch(std::vector<int> block_num, std::vector<int> lo
     grid_size *= block_num[i];
   }
   
-  cs[VGT_NUM_INDICES] = grid_size*group_size;
+  cs[VGT_NUM_INDICES] = /*grid_size**/group_size;
   
   cs[VGT_COMPUTE_THREAD_GROUP_SIZE] = group_size;
   
@@ -1144,17 +1165,32 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
   cs.reloc(sh->binary_code_bo, RADEON_GEM_DOMAIN_VRAM, 0);
   
   cs[SQ_PGM_RESOURCES_LS] = {
-    (sh->num_gprs << NUM_GPRS_shift) | (sh->stack_size << STACK_SIZE_shift) | PRIME_CACHE_ENABLE,
-    SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
+    (sh->num_gprs << NUM_GPRS_shift) | (sh->stack_size << STACK_SIZE_shift) /*| PRIME_CACHE_ENABLE*/,
+    0 //     SQ_ROUND_NEAREST_EVEN | ALLOW_DOUBLE_DENORM_IN_bit | ALLOW_DOUBLE_DENORM_OUT_bit
   };
   
-  uint32_t tt = (sh->num_gprs << NUM_GPRS_shift) | (sh->stack_size << STACK_SIZE_shift) | PRIME_CACHE_ENABLE;
+  //uint32_t tt = (sh->num_gprs << NUM_GPRS_shift) | (sh->stack_size << STACK_SIZE_shift) | PRIME_CACHE_ENABLE;
+  
+  cs[SQ_GPR_RESOURCE_MGMT_1] = sh->temp_gprs << NUM_CLAUSE_TEMP_GPRS_shift;
+  cs[SQ_GPR_RESOURCE_MGMT_1] = 0;
+  cs[SQ_GPR_RESOURCE_MGMT_1] = 0;
+  
+  cs[SQ_STATIC_THREAD_MGMT1] = 0xFFFFFFFF;
+  cs[SQ_STATIC_THREAD_MGMT2] = 0xFFFFFFFF;
+  cs[SQ_STATIC_THREAD_MGMT3] = 0xFFFFFFFF;
+  
+  cs[SPI_THREAD_GROUPING] = CS_GROUPING(0);
   
   cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_1] = 0;
-  cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = (sh->global_gprs << LS_GGPR_BASE_shift) | (sh->global_gprs << CS_GGPR_BASE_shift);
+  cs[SQ_GLOBAL_GPR_RESOURCE_MGMT_2] = 0; //(sh->global_gprs << LS_GGPR_BASE_shift) | (sh->global_gprs << CS_GGPR_BASE_shift);
   
+  cs[SQ_STACK_RESOURCE_MGMT_1] = 0;
+  cs[SQ_STACK_RESOURCE_MGMT_2] = 0;
   cs[SQ_STACK_RESOURCE_MGMT_3] = sh->stack_size << NUM_LS_STACK_ENTRIES_shift;
-  cs[SQ_THREAD_RESOURCE_MGMT_2] = sh->thread_num << NUM_LS_THREADS_shift;
+  
+  cs[SQ_THREAD_RESOURCE_MGMT] = 0;
+  cs[SQ_THREAD_RESOURCE_MGMT_2] = (sh->thread_num << NUM_LS_THREADS_shift);
+  
 }
 
 void r800_state::load_shader(compute_shader* sh)
