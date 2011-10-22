@@ -53,7 +53,7 @@ int main()
 
   int fd = open("/dev/dri/card1", O_RDWR, 0);
 
-  r800_state state(fd, true);
+  r800_state state(fd, false);
   state.set_default_state();
   
   compute_shader sh(&state, "first_cs.bin");

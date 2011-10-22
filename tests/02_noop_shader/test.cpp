@@ -35,9 +35,30 @@
 
 #include <r800_state.h>
 #include <cs_image.h>
+#include <iostream>
+
+using namespace std;
 
 void do_test(r800_state& state)
 {
   compute_shader sh(&state, "shader.bin");
+  state.set_kms_compute_mode(true);
+  radeon_bo* buffer = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
 
+  {
+    state.set_rat(11, buffer, 0, 1024*1024); ///< We use it for radeon_bo_wait, but not in the shader code!
+    state.set_gds(0, 0);
+    state.set_tmp_ring(NULL, 0, 0);
+    state.set_lds(0, 0, 0);
+    state.load_shader(&sh);
+    state.direct_dispatch({1}, {1});
+
+    cerr << "start kernel" << endl;
+    state.flush_cs();
+  }
+  
+  radeon_bo_wait(buffer);
+  radeon_bo_unref(buffer);
+  
+  cerr << "OK" << endl;
 }
