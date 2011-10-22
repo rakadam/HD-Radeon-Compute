@@ -104,9 +104,22 @@ void do_test(r800_state& state)
   
   ptr = (uint32_t*)write_buffer->ptr;
 
-  if (ptr[0] != 42) ///< we are only supposed to write the first element in this test
+  cout << "result:" << endl;
+  
+  for (int i = 0; i < 4; i++)
+  {
+    cout << ptr[i] << " ";
+  }
+  
+  cout << endl;
+  
+  if (ptr[0] != 42 or ptr[1] != 43 or ptr[2] != 44 or ptr[3] != 45) ///< we are only supposed to write the first element in this test
   {
     throw runtime_error("Error: readback failed");
+  }
+  else
+  {
+    cout << ":)" << endl;
   }
   
   radeon_bo_unmap(write_buffer);  
