@@ -183,8 +183,8 @@ void r800_state::init_gpu()
     (unsigned long long)mminfo.vram_visible/1024/1024);
 
   cs.cs_erase();
-  cs.set_limit(RADEON_GEM_DOMAIN_GTT, mminfo.gart_size);
-  cs.set_limit(RADEON_GEM_DOMAIN_VRAM, mminfo.vram_size);
+  cs.set_limit(RADEON_GEM_DOMAIN_GTT, mminfo.gart_size-1);
+  cs.set_limit(RADEON_GEM_DOMAIN_VRAM, mminfo.vram_size-1);
 
   set_default_state();
 }

@@ -51,9 +51,9 @@ int main()
   char* buf;
   assert(drmAvailable());
 
-  int fd = open("/dev/dri/card0", O_RDWR, 0);
+  int fd = open("/dev/dri/card1", O_RDWR, 0);
 
-  r800_state state(fd, true);
+  r800_state state(fd, false);
   state.set_default_state();
   
   compute_shader sh(&state, "first_cs.bin");
@@ -122,7 +122,7 @@ int main()
 //     state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 1024*1024, 0, buffer, /*RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); 
 
     cout << "start kernel" << endl;
-    state.flush_cs();
+ //   state.flush_cs();
   }
   
   radeon_bo_wait(buffer);

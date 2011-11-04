@@ -48,7 +48,7 @@ void do_test(r800_state& state)
   radeon_bo* write_buffer = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   radeon_bo_map(write_buffer, 1);
   
-  uint32_t *ptr = (uint32_t*)write_buffer->ptr;
+  int32_t *ptr = (int32_t*)write_buffer->ptr;
 
   for (int i = 0; i < 1024*256; i++)
   {
@@ -60,7 +60,7 @@ void do_test(r800_state& state)
   radeon_bo* read_buffer = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   radeon_bo_map(read_buffer, 1);
   
-  ptr = (uint32_t*)read_buffer->ptr;
+  ptr = (int32_t*)read_buffer->ptr;
 
   for (int i = 0; i < 1024; i++)
   {
@@ -106,7 +106,7 @@ void do_test(r800_state& state)
   
   radeon_bo_map(write_buffer, 0);
   
-  ptr = (uint32_t*)write_buffer->ptr;
+  ptr = (int32_t*)write_buffer->ptr;
 
   cout << "result:" << endl;
   
