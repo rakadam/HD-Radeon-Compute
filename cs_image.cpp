@@ -107,7 +107,7 @@ compute_shader::compute_shader(r800_state* state, std::string fname)
   num_gprs = 8;
   temp_gprs = 0;
   global_gprs = 0;
-  stack_size = 1;
+  stack_size = 16;
   thread_num = 4; //TODO: how to configure it?
   dyn_gpr_limit = 0;
   

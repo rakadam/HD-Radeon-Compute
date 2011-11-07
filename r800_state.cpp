@@ -1171,9 +1171,10 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
   
   //uint32_t tt = (sh->num_gprs << NUM_GPRS_shift) | (sh->stack_size << STACK_SIZE_shift) | PRIME_CACHE_ENABLE;
   
+  cs[SQ_CONFIG] = EXPORT_SRC_C_bit | VC_ENABLE_bit | (1 << CS_PRIO_shift);
   cs[SQ_GPR_RESOURCE_MGMT_1] = sh->temp_gprs << NUM_CLAUSE_TEMP_GPRS_shift;
-  cs[SQ_GPR_RESOURCE_MGMT_1] = 0;
-  cs[SQ_GPR_RESOURCE_MGMT_1] = 0;
+  cs[SQ_GPR_RESOURCE_MGMT_2] = 0;
+  cs[SQ_GPR_RESOURCE_MGMT_3] = 0xf8 << NUM_LS_GPRS_shift;
   
   cs[SQ_STATIC_THREAD_MGMT1] = 0xFFFFFFFF;
   cs[SQ_STATIC_THREAD_MGMT2] = 0xFFFFFFFF;
@@ -1186,10 +1187,10 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
   
   cs[SQ_STACK_RESOURCE_MGMT_1] = 0;
   cs[SQ_STACK_RESOURCE_MGMT_2] = 0;
-  cs[SQ_STACK_RESOURCE_MGMT_3] = sh->stack_size << NUM_LS_STACK_ENTRIES_shift;
+  cs[SQ_STACK_RESOURCE_MGMT_3] = 0x200 << NUM_LS_STACK_ENTRIES_shift;
   
   cs[SQ_THREAD_RESOURCE_MGMT] = 0;
-  cs[SQ_THREAD_RESOURCE_MGMT_2] = (sh->thread_num << NUM_LS_THREADS_shift);
+  cs[SQ_THREAD_RESOURCE_MGMT_2] = (0xf8 << NUM_LS_THREADS_shift);
   
 }
 

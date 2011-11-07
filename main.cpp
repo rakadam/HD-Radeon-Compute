@@ -51,7 +51,7 @@ int main()
   char* buf;
   assert(drmAvailable());
 
-  int fd = open("/dev/dri/card1", O_RDWR, 0);
+  int fd = open("/dev/dri/card0", O_RDWR, 0);
 
   r800_state state(fd, false);
   state.set_default_state();
@@ -116,13 +116,13 @@ int main()
 //     state.set_tmp_ring(NULL, 0, 0);
     state.set_lds(0, 0, 0);
     state.load_shader(&sh);
-//     state.direct_dispatch({1}, {1});
-    state.direct_dispatch({8}, {64});
+     state.direct_dispatch({1}, {256});
+//    state.direct_dispatch({8}, {64});
 
 //     state.set_surface_sync(CB_ACTION_ENA_bit | CB11_DEST_BASE_ENA_bit, 1024*1024, 0, buffer, /*RADEON_GEM_DOMAIN_VRAM*/0, RADEON_GEM_DOMAIN_VRAM); 
 
     cout << "start kernel" << endl;
- //   state.flush_cs();
+    state.flush_cs();
   }
   
   radeon_bo_wait(buffer);
@@ -142,7 +142,7 @@ int main()
 
   ptr = (uint32_t*)buffer->ptr;
 
-  for (int i = 0; i < 1024*8; i+=4*64)
+  for (int i = 0; i < 1024*8; i+=4*32)
   {
     printf("%10u %10u %8i %8i\n", ptr[i], ptr[i+1], ptr[i+2], ptr[i+3]);
   }
