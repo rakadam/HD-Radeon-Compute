@@ -28,7 +28,7 @@
  *
  * Author(s):
  *          Adam Rak <adam.rak@streamnovation.com>
- *
+ *          Carl-Philip Hänsch <s3734770@mail.zih.tu-dresden.de>
  *
  *
  */
@@ -40,7 +40,7 @@
 #include <stdexcept>
 #include <signal.h>
 #include <sys/time.h>
-       
+
 using namespace std;
 
 #define matwid 1024
@@ -50,7 +50,7 @@ struct timeval gettime()
 {
     struct timeval tv;
     struct timezone tz;
-    
+
     gettimeofday(&tv, &tz);
 
     return tv;
@@ -166,33 +166,33 @@ void do_test(r800_state& state)
   /// set matrix thread count
   if(matwid <= dividor)
     state.direct_dispatch({1}, {matwid, matwid});
-  else 
+  else
     state.direct_dispatch({matwid/dividor, matwid/dividor}, {dividor, dividor});
 
   cerr << "start kernel" << endl;
   //clock_t time1 = clock();
-  
+
   timeval time1 = gettime();
- 
+
   state.flush_cs();
 
   radeon_bo_wait(write_buffer);
 
   radeon_bo_map(write_buffer, 0);
-  
+
   timeval time2 = gettime();
-  
+
   long long dsec = (((long long)time2.tv_sec) - ((long long)time1.tv_sec));
   long long dusec = dsec*1000000 + ((long long)time2.tv_usec) - ((long long)time1.tv_usec);
-  
-  
+
+
   cout << "Execution time: " << (dusec) << "us" << endl;
   double ft = dusec;
   double oper = double(matwid)*double(matwid)*double(matwid)*2;
 
-  cout << oper / ft / 1000.0 << "GFlop/s" << endl;
-  cout << (oper*4) / ft / 1000.0 << "Gbyte/s" << endl;
-  
+  cout << oper / ft / 1000.0 << " GFlop/s" << endl;
+  cout << (oper*4) / ft / 1000.0 << " Gbyte/s" << endl;
+
   ptr = (float*)write_buffer->ptr;
 /*
   cout << "result:" << endl;

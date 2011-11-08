@@ -28,7 +28,7 @@
  *
  * Author(s):
  *          Adam Rak <adam.rak@streamnovation.com>
- *
+ *          Carl-Philip Hänsch <s3734770@mail.zih.tu-dresden.de>
  *
  *
  */
