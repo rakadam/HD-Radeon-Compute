@@ -40,10 +40,11 @@
 #include <stdexcept>
 #include <signal.h>
 #include <sys/time.h>
+#include <math.h>
 
 using namespace std;
 
-#define matwid 1024
+#define matwid 16
 #define dividor 16
 
 struct timeval gettime()
@@ -58,7 +59,34 @@ struct timeval gettime()
 
 void do_test(r800_state& state)
 {
-  //state.soft_reset(); return;
+  // TODO: randomize
+  // first fill a matrix, multiply on CPU and measure time
+  float a[matwid][matwid], b[matwid][matwid], c[matwid][matwid];
+  for(int i = 0; i < matwid; i++) {
+    for(int j = 0; j < matwid; j++) {
+      a[i][j] = (rand()%1024) / 1023.0;
+      b[i][j] = (rand()%1024) / 1023.0;
+    }
+  }
+
+  // multiply the matrix on the CPU
+  timeval ctime1 = gettime();
+
+  // Matrix a in video memory
+  for(int i = 0; i < matwid; i++) {
+    for(int j = 0; j < matwid; j++) {
+      c[i][j] = 0.0f;
+      for(int k = 0; k < matwid; k++) {
+        c[i][j] += a[i][k]*b[k][j];
+      }
+    }
+  }
+
+  timeval ctime2 = gettime();
+
+  long long cdsec = (((long long)ctime2.tv_sec) - ((long long)ctime1.tv_sec));
+  long long cdusec = cdsec*1000000 + ((long long)ctime2.tv_usec) - ((long long)ctime1.tv_usec);
+
 
   compute_shader sh(&state, "shader.bin");
   state.set_kms_compute_mode(true);
@@ -67,10 +95,10 @@ void do_test(r800_state& state)
 
   float *ptr = (float*)write_buffer->ptr;
 
-  // Ausgabe-Matrix
+  // Output matrix c in video memory
   for (int i = 0; i < matwid*matwid; i++)
   {
-    ptr[i] = 0.0f; ///< Fill it with a default value
+    ptr[i] = 0.0f;
   }
 
   radeon_bo_unmap(write_buffer);
@@ -80,10 +108,11 @@ void do_test(r800_state& state)
 
   ptr = (float*)read_buffer_1->ptr;
 
-  // Matrix1
-  for (int i = 0; i < matwid*matwid; i++)
-  {
-    ptr[i] = i % matwid == i / matwid ? 1 : 0.1;;(rand()%1024) / 1023.0;
+  // Matrix a in video memory
+  for(int i = 0; i < matwid; i++) {
+    for(int j = 0; j < matwid; j++) {
+      ptr[matwid*i+j] = a[i][j];
+    }
   }
 
   radeon_bo_unmap(read_buffer_1);
@@ -93,10 +122,12 @@ void do_test(r800_state& state)
 
   ptr = (float*)read_buffer_2->ptr;
 
-  // Transponierte zweite Matrix
-  for (int i = 0; i < matwid*matwid; i++)
-  {
-    ptr[i] = i % 3;//(rand()%1024) / 1023.0;
+  // Matrix b in video memory
+  for(int i = 0; i < matwid; i++) {
+    for(int j = 0; j < matwid; j++) {
+      // transposed
+      ptr[matwid*j+i] = b[i][j];
+    }
   }
   radeon_bo_unmap(read_buffer_2);
 
@@ -186,7 +217,8 @@ void do_test(r800_state& state)
   long long dusec = dsec*1000000 + ((long long)time2.tv_usec) - ((long long)time1.tv_usec);
 
 
-  cout << "Execution time: " << (dusec) << "us" << endl;
+  cout << "Execution time CPU: " << (cdusec) << "us" << endl;
+  cout << "Execution time GPU: " << (dusec) << "us" << endl;
   double ft = dusec;
   double oper = double(matwid)*double(matwid)*double(matwid)*2;
 
@@ -194,16 +226,15 @@ void do_test(r800_state& state)
   cout << (oper*4) / ft / 1000.0 << " Gbyte/s" << endl;
 
   ptr = (float*)write_buffer->ptr;
-/*
-  cout << "result:" << endl;
+  int failcount = 0;
 
   for(int i = 0; i < matwid; i++) {
     for(int j = 0; j < matwid; j++) {
-      cout << ptr[matwid*i+j] << " ";
+      if(fabs(ptr[matwid*i+j]-c[i][j]) > 0.001) failcount++;
     }
-    cout << endl;
   }
-*/
+  cout << "wrong calculated elements: " << failcount << " / " << matwid*matwid << endl;
+
   radeon_bo_unmap(write_buffer);
 
   radeon_bo_unref(write_buffer);
