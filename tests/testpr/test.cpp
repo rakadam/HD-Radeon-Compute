@@ -57,11 +57,12 @@ struct timeval gettime()
     return tv;
 }
 
+float a[matwid][matwid], b[matwid][matwid], c[matwid][matwid];
+
 void do_test(r800_state& state)
 {
   // TODO: randomize
   // first fill a matrix, multiply on CPU and measure time
-  float a[matwid][matwid], b[matwid][matwid], c[matwid][matwid];
   for(int i = 0; i < matwid; i++) {
     for(int j = 0; j < matwid; j++) {
       a[i][j] = (rand()%1024) / 1023.0;
