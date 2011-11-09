@@ -44,7 +44,7 @@
 
 using namespace std;
 
-#define matwid 512
+#define matwid 1024
 #define dividor 16
 
 struct timeval gettime()
@@ -231,7 +231,11 @@ void do_test(r800_state& state)
 
   for(int i = 0; i < matwid; i++) {
     for(int j = 0; j < matwid; j++) {
-      if(fabs(ptr[matwid*i+j]-c[i][j]) > 0.001) failcount++;
+      if(fabs(ptr[matwid*i+j]-c[i][j]) > 0.001)
+      {
+        cout << ptr[matwid*i+j] << " " << c[i][j] << endl;
+        failcount++;
+      }
     }
   }
   cout << "wrong calculated elements: " << failcount << " / " << matwid*matwid << endl;

@@ -104,7 +104,7 @@ compute_shader::compute_shader(r800_state* state, std::string fname)
   fclose(f); 
   
   lds_alloc = 0;
-  num_gprs = 8;
+  num_gprs = 10;
   temp_gprs = 0;
   global_gprs = 0;
   stack_size = 16;
