@@ -44,7 +44,7 @@
 
 using namespace std;
 
-#define matwid 1024
+#define matwid 512
 #define dividor 16
 
 struct timeval gettime()
@@ -91,7 +91,7 @@ void do_test(r800_state& state)
 
   compute_shader sh(&state, "shader.bin");
   state.set_kms_compute_mode(true);
-  radeon_bo* write_buffer = state.bo_open(0, 4*matwid*matwid, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  radeon_bo* write_buffer = state.bo_open(0, 4*matwid*matwid, 4096, RADEON_GEM_DOMAIN_VRAM, 0);
   radeon_bo_map(write_buffer, 1);
 
   float *ptr = (float*)write_buffer->ptr;
@@ -144,9 +144,9 @@ void do_test(r800_state& state)
   vtxr1.dst_sel_z       = SQ_SEL_Z;
   vtxr1.dst_sel_w       = SQ_SEL_W;
   vtxr1.endian = SQ_ENDIAN_NONE;
-  vtxr1.num_format_all = SQ_NUM_FORMAT_SCALED;
-  vtxr1.format = FMT_32_32_32_32;
-
+  vtxr1.num_format_all = SQ_NUM_FORMAT_NORM;
+  vtxr1.format = FMT_32_32_32_32_FLOAT;
+  vtxr1.uncached = false;
 
   vtxr1.id = SQ_FETCH_RESOURCE_cs+0;
   vtxr1.bo = read_buffer_1;
@@ -165,8 +165,9 @@ void do_test(r800_state& state)
   vtxr2.dst_sel_z       = SQ_SEL_Z;
   vtxr2.dst_sel_w       = SQ_SEL_W;
   vtxr2.endian = SQ_ENDIAN_NONE;
-  vtxr2.num_format_all = SQ_NUM_FORMAT_SCALED;
-  vtxr2.format = FMT_32_32_32_32;
+  vtxr2.num_format_all = SQ_NUM_FORMAT_NORM;
+  vtxr2.format = FMT_32_32_32_32_FLOAT;
+  vtxr1.uncached = false;
 
   vtxr2.id = SQ_FETCH_RESOURCE_cs+1;
   vtxr2.bo = read_buffer_2;
@@ -186,7 +187,7 @@ void do_test(r800_state& state)
   state.setup_const_cache(0, param_buf, 256, 0); // Matrix width
 
   loop_const myloop;
-  myloop.count = matwid/4;
+  myloop.count = matwid/4/2;
   myloop.init = 0;
   myloop.inc =  4;
   state.set_loop_consts({myloop});
