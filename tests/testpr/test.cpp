@@ -44,7 +44,7 @@
 
 using namespace std;
 
-#define matwid 16
+#define matwid 512
 #define dividor 16
 
 struct timeval gettime()
