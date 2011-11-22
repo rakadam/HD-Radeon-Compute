@@ -44,7 +44,7 @@
 
 using namespace std;
 
-#define matwid 1024
+#define matwid 512
 #define dividor 16
 
 struct timeval gettime()
@@ -97,6 +97,7 @@ void do_test(r800_state& state)
 
   float *ptr = (float*)write_buffer->ptr;
 
+  cout << "filling memory" << endl;
   // Output matrix c in video memory
   for (int i = 0; i < matwid*matwid; i++)
   {
