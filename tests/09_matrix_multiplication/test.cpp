@@ -44,7 +44,7 @@
 
 using namespace std;
 
-#define matwid 512
+#define matwid 16
 #define dividor 16
 
 struct timeval gettime()
@@ -91,7 +91,7 @@ void do_test(r800_state& state)
 
   compute_shader sh(&state, "shader.bin");
   state.set_kms_compute_mode(true);
-  radeon_bo* write_buffer = state.bo_open(0, 4*matwid*matwid, 4096, RADEON_GEM_DOMAIN_VRAM, 0);
+  radeon_bo* write_buffer = state.bo_open(0, 4*matwid*matwid, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   radeon_bo_map(write_buffer, 1);
 
   float *ptr = (float*)write_buffer->ptr;
@@ -182,6 +182,7 @@ void do_test(r800_state& state)
 
   cptr[0] = matwid;
   cptr[1] = dividor;
+  cptr[2] = 4;
 
   radeon_bo_unmap(param_buf);
   state.setup_const_cache(0, param_buf, 256, 0); // Matrix width
@@ -198,9 +199,9 @@ void do_test(r800_state& state)
   state.load_shader(&sh);
   /// set matrix thread count
   if(matwid <= dividor)
-    state.direct_dispatch({1}, {matwid, matwid});
+    state.direct_dispatch({1, 1}, {matwid, matwid/4});
   else
-    state.direct_dispatch({matwid/dividor, matwid/dividor}, {dividor, dividor});
+    state.direct_dispatch({2,2}/*{matwid/dividor, matwid/dividor}*/, {dividor, dividor/4});
 
   cerr << "start kernel" << endl;
   //clock_t time1 = clock();
@@ -234,7 +235,7 @@ void do_test(r800_state& state)
     for(int j = 0; j < matwid; j++) {
       if(fabs(ptr[matwid*i+j]-c[i][j]) > 0.001)
       {
-        cout << ptr[matwid*i+j] << " " << c[i][j] << endl;
+        cout << i << " " << j << ": " << ptr[matwid*i+j] << " " << c[i][j] << endl;
         failcount++;
       }
     }
