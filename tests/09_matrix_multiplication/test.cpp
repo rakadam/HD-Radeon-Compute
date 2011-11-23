@@ -188,7 +188,7 @@ void do_test(r800_state& state)
   state.setup_const_cache(0, param_buf, 256, 0); // Matrix width
 
   loop_const myloop;
-  myloop.count = matwid/4/2;
+  myloop.count = matwid/4;
   myloop.init = 0;
   myloop.inc =  4;
   state.set_loop_consts({myloop});
