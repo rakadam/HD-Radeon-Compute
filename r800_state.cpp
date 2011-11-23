@@ -1186,10 +1186,10 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
 
   cs[SQ_STACK_RESOURCE_MGMT_1] = 0;
   cs[SQ_STACK_RESOURCE_MGMT_2] = 0;
-  cs[SQ_STACK_RESOURCE_MGMT_3] = 0x200 << NUM_LS_STACK_ENTRIES_shift;
+  cs[SQ_STACK_RESOURCE_MGMT_3] = 0x40 << NUM_LS_STACK_ENTRIES_shift;
 
   cs[SQ_THREAD_RESOURCE_MGMT] = 0;
-  cs[SQ_THREAD_RESOURCE_MGMT_2] =  (40 << NUM_LS_THREADS_shift);//(0xf8/2 << NUM_LS_THREADS_shift);
+  cs[SQ_THREAD_RESOURCE_MGMT_2] =  (64 << NUM_LS_THREADS_shift);//(0xf8/2 << NUM_LS_THREADS_shift);
 
 }
 
