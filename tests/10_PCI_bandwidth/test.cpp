@@ -56,7 +56,7 @@ void do_test(r800_state& state)
   compute_shader sh(&state, "shader.bin");
   state.set_kms_compute_mode(true);
   
-  int num = 4;
+  int num = 8;
   size_t size = 64*1024*1024;
   radeon_bo* buffer = state.bo_open(0, 128*1024*1024, 4096, RADEON_GEM_DOMAIN_VRAM, 0);
 
@@ -64,12 +64,12 @@ void do_test(r800_state& state)
   
   timeval time1 = gettime();
 
-  radeon_bo_map(buffer, 1);
   
-  uint32_t *ptr = (uint32_t*)buffer->ptr;
     
   for (int j = 0; j < num; j++)
   {
+  radeon_bo_map(buffer, 1);
+  uint32_t *ptr = (uint32_t*)buffer->ptr;
     for (size_t i = 0; i < size/4; i+=4)
     {
       ptr[i] = j;
@@ -77,11 +77,11 @@ void do_test(r800_state& state)
       ptr[i+2] = j;
       ptr[i+3] = j;
     }
+  radeon_bo_unmap(buffer);
   }
 
   timeval time2 = gettime();
   
-  radeon_bo_unmap(buffer);
   
   long long dsec = (((long long)time2.tv_sec) - ((long long)time1.tv_sec));
   long long dusec = dsec*1000000 + ((long long)time2.tv_usec) - ((long long)time1.tv_usec);
@@ -89,6 +89,7 @@ void do_test(r800_state& state)
   cout << "Time: " << dusec << " us" << endl;
   cout << "speed: " << double(size*num) / double(dusec) / 1024.0 << " GBps" << endl;
   
+  /*
   {
     state.set_rat(11, buffer, 0, 1024*1024); ///< We use it for radeon_bo_wait, but not in the shader code!
     state.set_gds(0, 0);
@@ -100,29 +101,32 @@ void do_test(r800_state& state)
     cerr << "start kernel" << endl;
     state.flush_cs();
   }
+  */
   
   radeon_bo_wait(buffer);
   
   cout << "Read:" << endl;
   
   time1 = gettime();
-  radeon_bo_map(buffer, 0);
   
-  ptr = (uint32_t*)buffer->ptr;
+  int sum = 0;
+  
   uint32_t *tt = new uint32_t[size/4];
   
   for (int j = 0; j < num; j++)
   {
+  radeon_bo_map(buffer, 0);
+  uint32_t *ptr = (uint32_t*)buffer->ptr;
     for (size_t i = 0; i < size/4; i+=4)
     {
-      tt[i] = ptr[i];
-      tt[i+1] = ptr[i+1];
-      tt[i+2] = ptr[i+2];
-      tt[i+3] = ptr[i+3];
+      sum += ptr[i];
+      sum += ptr[i+1];
+      sum += ptr[i+2];
+      sum += ptr[i+3];
     }
+  radeon_bo_unmap(buffer);
   }
 
-  radeon_bo_unmap(buffer);
   
   time2 = gettime();
   
@@ -137,6 +141,8 @@ void do_test(r800_state& state)
     }
   }
   
+  printf("%i\r\n", sum);
+  
   timeval time3 = gettime();
   
   dsec = (((long long)time2.tv_sec) - ((long long)time1.tv_sec));
@@ -145,7 +151,7 @@ void do_test(r800_state& state)
   long long dsec2 = (((long long)time3.tv_sec) - ((long long)time2.tv_sec));
   long long dusec2 = dsec2*1000000 + ((long long)time3.tv_usec) - ((long long)time2.tv_usec);
 
-  dusec -= dusec2;
+//  dusec -= dusec2;
   
   cout << "Time: " << dusec << " us" << endl;
   cout << "speed: " << double(size*num) / double(dusec) / 1024.0 << " GBps" << endl;

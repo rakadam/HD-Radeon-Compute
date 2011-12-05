@@ -6,7 +6,7 @@ SET(CMAKE_VERBOSE_MAKEFILE OFF)
 ENABLE_TESTING()
 
 include_directories(. /usr/include/libdrm)
-SET(CMAKE_CXX_FLAGS "-std=c++0x -O3 -g3 -save-temps")
+SET(CMAKE_CXX_FLAGS "-std=c++0x -O2 -g3")
 
 SET(r800_src
 	cs_image.cpp

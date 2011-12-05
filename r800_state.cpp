@@ -1021,12 +1021,11 @@ void r800_state::soft_reset()
   init_gpu();
 }
 
-void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
+void r800_state::set_rat(int id, radeon_bo* bo, int start, int size, uint32_t wd)
 {
   int offset;
 
   int rd = 0;
-  int wd = RADEON_GEM_DOMAIN_VRAM;
 
   assert(id < 12);
 
@@ -1047,7 +1046,7 @@ void r800_state::set_rat(int id, radeon_bo* bo, int start, int size)
   cs[CB_COLOR0_BASE + offset] = start >> 8;
   cs.reloc(bo, rd, wd);
 
-  if (id < 8)
+  if (id < 6)
   {
     cs[CB_IMMED0_BASE + id*8] = start >> 8;
     cs.reloc(bo, rd, wd);
@@ -1187,10 +1186,10 @@ void r800_state::prepare_compute_shader(compute_shader* sh)
 
   cs[SQ_STACK_RESOURCE_MGMT_1] = 0;
   cs[SQ_STACK_RESOURCE_MGMT_2] = 0;
-  cs[SQ_STACK_RESOURCE_MGMT_3] = 0x100 << NUM_LS_STACK_ENTRIES_shift;
+  cs[SQ_STACK_RESOURCE_MGMT_3] = 0x40 << NUM_LS_STACK_ENTRIES_shift;
 
   cs[SQ_THREAD_RESOURCE_MGMT] = 0;
-  cs[SQ_THREAD_RESOURCE_MGMT_2] =  (40 << NUM_LS_THREADS_shift);//(0xf8/2 << NUM_LS_THREADS_shift);
+  cs[SQ_THREAD_RESOURCE_MGMT_2] =  (64 << NUM_LS_THREADS_shift);//(0xf8/2 << NUM_LS_THREADS_shift);
 
 }
 

@@ -89,13 +89,15 @@ void do_test(r800_state& state)
   long long cdusec = cdsec*1000000 + ((long long)ctime2.tv_usec) - ((long long)ctime1.tv_usec);
 
 
+  uint32_t domain = RADEON_GEM_DOMAIN_VRAM;
   compute_shader sh(&state, "shader.bin");
   state.set_kms_compute_mode(true);
-  radeon_bo* write_buffer = state.bo_open(0, 4*matwid*matwid, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  radeon_bo* write_buffer = state.bo_open(0, 4*matwid*matwid, 4096, domain, 0);
   radeon_bo_map(write_buffer, 1);
 
   float *ptr = (float*)write_buffer->ptr;
 
+  cout << "filling memory" << endl;
   // Output matrix c in video memory
   for (int i = 0; i < matwid*matwid; i++)
   {
@@ -104,7 +106,7 @@ void do_test(r800_state& state)
 
   radeon_bo_unmap(write_buffer);
 
-  radeon_bo* read_buffer_1 = state.bo_open(0, 4*matwid*matwid, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  radeon_bo* read_buffer_1 = state.bo_open(0, 4*matwid*matwid, 1024, domain, 0);
   radeon_bo_map(read_buffer_1, 1);
 
   ptr = (float*)read_buffer_1->ptr;
@@ -118,7 +120,7 @@ void do_test(r800_state& state)
 
   radeon_bo_unmap(read_buffer_1);
 
-  radeon_bo* read_buffer_2 = state.bo_open(0, 4*matwid*matwid, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  radeon_bo* read_buffer_2 = state.bo_open(0, 4*matwid*matwid, 1024, domain, 0);
   radeon_bo_map(read_buffer_2, 1);
 
   ptr = (float*)read_buffer_2->ptr;
@@ -150,7 +152,7 @@ void do_test(r800_state& state)
 
   vtxr1.id = SQ_FETCH_RESOURCE_cs+0;
   vtxr1.bo = read_buffer_1;
-  state.set_vtx_resource(&vtxr1, RADEON_GEM_DOMAIN_VRAM); ///< for vertex read
+  state.set_vtx_resource(&vtxr1, domain); ///< for vertex read
 
 
   vtx_resource_t vtxr2;
@@ -171,9 +173,9 @@ void do_test(r800_state& state)
 
   vtxr2.id = SQ_FETCH_RESOURCE_cs+1;
   vtxr2.bo = read_buffer_2;
-  state.set_vtx_resource(&vtxr2, RADEON_GEM_DOMAIN_VRAM); ///< for vertex read
+  state.set_vtx_resource(&vtxr2, domain); ///< for vertex read
 
-  state.set_rat(11, write_buffer, 0, 4*matwid*matwid); ///< For RAT write
+  state.set_rat(11, write_buffer, 0, 4*matwid*matwid, domain); ///< For RAT write
 
   /// set up param buffers
   radeon_bo* param_buf = state.bo_open(0, 1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);

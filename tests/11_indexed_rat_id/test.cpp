@@ -38,51 +38,48 @@
 #include <evergreen_reg.h>
 #include <iostream>
 #include <stdexcept>
-#include <sys/time.h>
 
 using namespace std;
 
-struct timeval gettime()
-{
-    struct timeval tv;
-    struct timezone tz;
-
-    gettimeofday(&tv, &tz);
-
-    return tv;
-}
-
 void do_test(r800_state& state)
 {
-  int size = 1024*1024*32;
-  
-  uint32_t domain = RADEON_GEM_DOMAIN_VRAM;
-  
   compute_shader sh(&state, "shader.bin");
   state.set_kms_compute_mode(true);
-  radeon_bo* write_buffer = state.bo_open(0, size, 4096, domain, 0);
+  radeon_bo* write_buffer = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
+  radeon_bo* write_buffer2 = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   radeon_bo_map(write_buffer, 1);
   
   uint32_t *ptr = (uint32_t*)write_buffer->ptr;
 
-  for (int i = 0; i < size/4; i++)
+  for (int i = 0; i < 1024*256; i++)
   {
-    ptr[i] = 0xFF; ///< Fill it with a default value
+    ptr[i] = 0xdeadbeef; ///< Fill it with a default value
   } 
   
   radeon_bo_unmap(write_buffer);
 
-  radeon_bo* read_buffer = state.bo_open(0, size, 4096, domain, 0);
+
+  radeon_bo* read_buffer = state.bo_open(0, 1024*1024, 1024, RADEON_GEM_DOMAIN_VRAM, 0);
   radeon_bo_map(read_buffer, 1);
   
   ptr = (uint32_t*)read_buffer->ptr;
 
-  for (int i = 0; i < size/4; i++)
+  for (int i = 0; i < 1024; i++)
   {
     ptr[i] = 42+i; ///< Fill it with the input pattern
   } 
   
   radeon_bo_unmap(read_buffer);
+  
+  radeon_bo_map(write_buffer2, 1);
+  ptr = (uint32_t*)write_buffer2->ptr;
+
+  for (int i = 0; i < 1024*256; i++)
+  {
+    ptr[i] = 0xdeadbeef; ///< Fill it with the input pattern
+  } 
+  
+  radeon_bo_unmap(write_buffer2);
 
   vtx_resource_t vtxr;
 
@@ -90,7 +87,7 @@ void do_test(r800_state& state)
 
   vtxr.id = SQ_FETCH_RESOURCE_cs;
   vtxr.stride_in_dw = 1;
-  vtxr.size_in_dw = size/4;
+  vtxr.size_in_dw = 256;
   vtxr.vb_offset = 0;
   vtxr.bo = read_buffer;
   vtxr.dst_sel_x       = SQ_SEL_X;
@@ -101,61 +98,75 @@ void do_test(r800_state& state)
   vtxr.num_format_all = SQ_NUM_FORMAT_INT;
   vtxr.format = FMT_32_32_32_32;
 
-  state.set_vtx_resource(&vtxr, domain); ///< for vertex read
-  state.set_rat(11, write_buffer, 0, size); ///< For RAT write
+  state.set_vtx_resource(&vtxr, RADEON_GEM_DOMAIN_VRAM); ///< for vertex read
+
+  for (int i = 0; i < 12; i++)
+  {
+     state.set_rat(i, write_buffer2, 0, 1024*1024); ///< For RAT write
+  }
+
+  state.set_rat(11, write_buffer, 0, 1024*1024); ///< For RAT write
   
   state.set_gds(0, 0);
   state.set_tmp_ring(NULL, 0, 0);
   state.set_lds(0, 0, 0);
   state.load_shader(&sh);
-  state.direct_dispatch({size/4096}, {256});
-
+  state.direct_dispatch({1}, {1});
 
   cerr << "start kernel" << endl;
-  timeval time1 = gettime();
-
   state.flush_cs();
   
   radeon_bo_wait(write_buffer);
-  
-  timeval time2 = gettime();
-  
-  long long dsec = (((long long)time2.tv_sec) - ((long long)time1.tv_sec));
-  long long dusec = dsec*1000000 + ((long long)time2.tv_usec) - ((long long)time1.tv_usec);
-
-  cout << "Execution time GPU: " << (dusec) << "us" << endl;
-  
-  double ft = dusec;
-  
-  cout << (size) / ft / 1000.0 << " Gbyte/s" << endl;
-  cout << (8*size) / ft / 1000.0 << " Gbit/s" << endl;
   
   radeon_bo_map(write_buffer, 0);
   
   ptr = (uint32_t*)write_buffer->ptr;
 
-  cout << "result: " << endl;
+  cout << "write_buffer:" << endl;
   
-  for (int i = 0; i < 256; i++)
+  for (int i = 0; i < 1024*256; i++)
   {
-    cout << ptr[i] << " ";
+    if (ptr[i] != 0xdeadbeef)
+    {
+      cout << ptr[i] << " ";
+    }
   }
   
   cout << endl;
-
-  for (int i = 0; i < size/4; i++)
+  
+  
+  if (ptr[0] != 42 or ptr[1] != 43 or ptr[2] != 44 or ptr[3] != 45) ///< we are only supposed to write the first element in this test
   {
-    if (ptr[i] != i+42)
+  cout << "fail, readback failed" << endl;
+    //throw runtime_error("Error: readback failed");
+  }
+  else
+  {
+    cout << ":)" << endl;
+  }
+  
+  radeon_bo_unmap(write_buffer);  
+
+
+  radeon_bo_map(write_buffer2, 0);
+  
+  ptr = (uint32_t*)write_buffer2->ptr;
+
+  cout << "write_buffer2:" << endl;
+  
+  for (int i = 0; i < 1024*256; i++)
+  {
+    if (ptr[i] != 0xdeadbeef)
     {
-      cerr << i << " : " << ptr[i] << " != " << i+42  << " (does not equal  the expected value)" << endl; 
-      throw runtime_error("Error: shader result verify failed");
+      cout << ptr[i] << " ";
     }
   }
-    
-  radeon_bo_unmap(write_buffer);  
+  
+  cout << endl;
+  radeon_bo_unmap(write_buffer2);  
+
   
   radeon_bo_unref(write_buffer);
   radeon_bo_unref(read_buffer);
-  
   cerr << "OK" << endl;
 }
