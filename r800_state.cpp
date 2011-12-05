@@ -1046,7 +1046,7 @@ void r800_state::set_rat(int id, radeon_bo* bo, int start, int size, uint32_t wd
   cs[CB_COLOR0_BASE + offset] = start >> 8;
   cs.reloc(bo, rd, wd);
 
-  if (id < 8)
+  if (id < 6)
   {
     cs[CB_IMMED0_BASE + id*8] = start >> 8;
     cs.reloc(bo, rd, wd);
